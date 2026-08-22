@@ -10,12 +10,8 @@ public class ApiNotFoundController {
 
     @RequestMapping("/api/{*path}")
     public ResponseEntity<ApiErrorResponse> notFound() {
-        ApiError error = new ApiError("NOT_FOUND", "The requested resource was not found.");
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiErrorResponse(error));
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiErrorResponse.of(
+                        "NOT_FOUND", "The requested resource was not found."));
     }
-
-    public record ApiError(String code, String message) {}
-
-    public record ApiErrorResponse(ApiError error) {}
 }
-

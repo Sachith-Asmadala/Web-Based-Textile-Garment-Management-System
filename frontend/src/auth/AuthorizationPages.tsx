@@ -1,0 +1,179 @@
+import { useEffect, useState } from "react";
+import { Link, Navigate } from "react-router-dom";
+
+import { getApiErrorMessage, type UserRole } from "../api/auth";
+import {
+  getRoleAccess,
+  isCanceledRequest,
+  type InternalRole,
+  type RoleAccessResponse,
+} from "../api/roleAccess";
+import { useAuth } from "./useAuth";
+
+function StatePage({
+  eyebrow,
+  title,
+  message,
+  action,
+}: {
+  eyebrow: string;
+  title: string;
+  message: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 py-12 text-slate-100">
+      <section className="w-full max-w-xl rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-2xl shadow-black/30 sm:p-12">
+        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-400">
+          {eyebrow}
+        </p>
+        <h1 className="mt-3 text-3xl font-bold tracking-tight">{title}</h1>
+        <p className="mt-5 leading-7 text-slate-300">{message}</p>
+        <div className="mt-8 flex flex-wrap gap-3">
+          {action}
+          <Link
+            className="rounded-full border border-slate-700 px-5 py-2 text-sm font-semibold hover:border-teal-400"
+            to="/"
+          >
+            Public home
+          </Link>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+export function AuthenticationRequiredPage() {
+  return (
+    <StatePage
+      action={
+        <Link
+          className="rounded-full bg-teal-400 px-5 py-2 text-sm font-semibold text-slate-950 hover:bg-teal-300"
+          to="/login"
+        >
+          Sign in
+        </Link>
+      }
+      eyebrow="401 · Authentication required"
+      message="Sign in with an authorized account before opening this protected page."
+      title="Authentication required"
+    />
+  );
+}
+
+export function ForbiddenPage() {
+  return (
+    <StatePage
+      eyebrow="403 · Forbidden"
+      message="Your account is authenticated, but its role does not permit this function."
+      title="Access forbidden"
+    />
+  );
+}
+
+export function ProtectedRoute({
+  allowedRoles,
+  children,
+}: {
+  allowedRoles: readonly UserRole[];
+  children: React.ReactNode;
+}) {
+  const { user, isLoading, sessionError } = useAuth();
+
+  if (isLoading) {
+    return (
+      <StatePage
+        eyebrow="Authorization"
+        message="Your authenticated session is being checked."
+        title="Checking access…"
+      />
+    );
+  }
+
+  if (sessionError && !user) {
+    return (
+      <StatePage
+        eyebrow="Authorization unavailable"
+        message="Access could not be verified safely. Return to the public page and try again."
+        title="Unable to verify access"
+      />
+    );
+  }
+
+  if (!user) {
+    return <Navigate replace to="/unauthorized" />;
+  }
+
+  if (!allowedRoles.includes(user.role)) {
+    return <Navigate replace to="/forbidden" />;
+  }
+
+  return children;
+}
+
+type AccessState =
+  | { status: "loading" }
+  | { status: "success"; response: RoleAccessResponse }
+  | { status: "error"; message: string };
+
+export function RoleAccessPage({ role }: { role: InternalRole }) {
+  const [state, setState] = useState<AccessState>({ status: "loading" });
+  const roleLabel = role.replaceAll("_", " ");
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    void getRoleAccess(role, controller.signal)
+      .then((response) => setState({ status: "success", response }))
+      .catch((error: unknown) => {
+        if (!isCanceledRequest(error)) {
+          setState({
+            status: "error",
+            message: getApiErrorMessage(
+              error,
+              "The server could not confirm access. Please try again.",
+            ),
+          });
+        }
+      });
+
+    return () => controller.abort();
+  }, [role]);
+
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 py-12 text-slate-100">
+      <section className="w-full max-w-2xl rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-2xl shadow-black/30 sm:p-12">
+        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-400">
+          Protected role function
+        </p>
+        <h1 className="mt-3 text-3xl font-bold tracking-tight">{roleLabel}</h1>
+        {state.status === "loading" ? (
+          <p aria-live="polite" className="mt-6 text-slate-300">
+            Confirming server authorization…
+          </p>
+        ) : state.status === "success" ? (
+          <div className="mt-6 rounded-2xl bg-emerald-950/50 p-5 text-emerald-100">
+            <p className="font-semibold">{state.response.message}</p>
+            <p className="mt-2 text-sm text-emerald-200">
+              The server authorized {state.response.role.replaceAll("_", " ")}.
+            </p>
+          </div>
+        ) : (
+          <p className="mt-6 rounded-2xl bg-rose-950/60 p-5 text-rose-200" role="alert">
+            {state.message}
+          </p>
+        )}
+        <p className="mt-6 text-sm leading-6 text-slate-400">
+          This page verifies the shared authorization boundary only. Business-module
+          actions will be added by their approved tickets.
+        </p>
+        <Link
+          className="mt-8 inline-block rounded-full border border-slate-700 px-5 py-2 text-sm font-semibold hover:border-teal-400"
+          to="/"
+        >
+          Return home
+        </Link>
+      </section>
+    </main>
+  );
+}

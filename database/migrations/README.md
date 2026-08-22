@@ -12,15 +12,17 @@ Never make an application schema change with undocumented manual SQL.
 - Development commands: Liquibase Maven plugin through the repository's Maven Wrapper.
 - Automated verification: H2 in MySQL compatibility mode.
 
-TGMS-2 adds no application tables because the existing health-check application does
-not persist data. The `0000_baseline` changeset only establishes a reversible,
-auditable starting point. Liquibase creates its own `DATABASECHANGELOG` and
-`DATABASECHANGELOGLOCK` infrastructure tables; these are not domain tables.
+TGMS-2's `0000_baseline` changeset establishes the reversible, auditable starting
+point. TGMS-3 adds only the shared `users` account table required by authentication;
+no garment product, supplier, inventory, order, production, or delivery tables exist
+yet. Liquibase also creates its own `DATABASECHANGELOG` and `DATABASECHANGELOGLOCK`
+infrastructure tables; these are not application tables.
 
 ```text
 database/migrations/
 ├── changes/
-│   └── 0000_baseline.sql
+│   ├── 0000_baseline.sql
+│   └── 20260822181000_create_users.sql
 ├── db.changelog-master.xml
 └── README.md
 ```
@@ -132,6 +134,19 @@ schema changes.
 - Review rollback SQL before execution and back up data before any destructive schema
   operation.
 
+## Current Shared Account Table
+
+`users` is the authentication source of truth. It uses the standard `BIGINT` primary
+key and timestamps, a case-normalized unique email, a bcrypt `password_hash`, full
+name, active flag, and one controlled role. Supported stored roles are
+`ADMINISTRATOR`, `SUPPLIER`, `INVENTORY_MANAGER`, `PRODUCTION_MANAGER`,
+`SALES_OFFICER`, and `CUSTOMER`.
+
+Public registration is an application rule that always inserts `CUSTOMER`; internal
+account provisioning belongs to a later approved administrator workflow. Never add
+plaintext passwords, tokens, development users, or staff seed credentials to a
+migration.
+
 ## TGMS-2 Verification
 
 | Acceptance check | Result |
@@ -139,3 +154,11 @@ schema changes.
 | Repeatable workflow | Implemented with versioned Liquibase changesets and root apply/status/rollback/verify commands |
 | Business-module schema | None added; the baseline changeset creates no application tables |
 | Conventions | Keys, relationships, timestamps, naming, history, and safety rules documented above |
+
+## TGMS-3 Verification
+
+| Acceptance check | Result |
+|---|---|
+| Minimum shared schema | Only `users` added; no business-module table added |
+| Repeatable migration | Automated H2/MySQL-mode test applies, rolls back, and reapplies both changesets |
+| Account integrity | Unique email, controlled role check, non-null bcrypt hash/name/active state, and standard timestamps enforced |

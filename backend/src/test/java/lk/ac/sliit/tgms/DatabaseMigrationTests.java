@@ -30,15 +30,16 @@ class DatabaseMigrationTests {
             try (Liquibase liquibase = new Liquibase(
                     CHANGELOG, new ClassLoaderResourceAccessor(), database)) {
                 liquibase.update(new Contexts(), new LabelExpression());
-                assertThat(executedChangeSetCount(connection)).isEqualTo(1);
-                assertThat(applicationTableCount(connection)).isZero();
+                assertThat(executedChangeSetCount(connection)).isEqualTo(2);
+                assertThat(applicationTables(connection)).containsExactly("USERS");
 
-                liquibase.rollback(1, new Contexts(), new LabelExpression());
+                liquibase.rollback(2, new Contexts(), new LabelExpression());
                 assertThat(executedChangeSetCount(connection)).isZero();
+                assertThat(applicationTables(connection)).isEmpty();
 
                 liquibase.update(new Contexts(), new LabelExpression());
-                assertThat(executedChangeSetCount(connection)).isEqualTo(1);
-                assertThat(applicationTableCount(connection)).isZero();
+                assertThat(executedChangeSetCount(connection)).isEqualTo(2);
+                assertThat(applicationTables(connection)).containsExactly("USERS");
             }
         }
     }
@@ -51,17 +52,21 @@ class DatabaseMigrationTests {
         }
     }
 
-    private long applicationTableCount(Connection connection) throws Exception {
+    private java.util.List<String> applicationTables(Connection connection) throws Exception {
         String query = """
-                SELECT COUNT(*)
+                SELECT table_name
                 FROM information_schema.tables
                 WHERE LOWER(table_schema) = 'public'
                   AND LOWER(table_name) NOT IN ('databasechangelog', 'databasechangeloglock')
+                ORDER BY table_name
                 """;
         try (Statement statement = connection.createStatement();
                 ResultSet resultSet = statement.executeQuery(query)) {
-            resultSet.next();
-            return resultSet.getLong(1);
+            java.util.List<String> tables = new java.util.ArrayList<>();
+            while (resultSet.next()) {
+                tables.add(resultSet.getString(1));
+            }
+            return tables;
         }
     }
 }

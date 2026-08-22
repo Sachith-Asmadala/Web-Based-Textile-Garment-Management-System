@@ -593,10 +593,10 @@ A feature should be considered complete only when:
 
 > TGMS-1 baseline inspected on 2026-08-22 at commit `d1cba2a` on branch `main`.
 
-The original repository contained only this README. Because no technical stack had
-been committed, the approved frontend fallback and the requested Spring Boot backend
-were used to establish a minimal runnable foundation without adding authentication,
-database models, or business-module functionality.
+The original repository contained only this README. TGMS-1 established the requested
+Spring Boot and React foundation, TGMS-2 added the Liquibase workflow, and TGMS-3 now
+adds the shared customer-registration and authentication contract. No business-module
+functionality has been added.
 
 ```text
 Web-Based-Textile-Garment-Management-System/
@@ -605,6 +605,8 @@ Web-Based-Textile-Garment-Management-System/
 │   ├── src/main/
 │   │   ├── java/lk/ac/sliit/tgms/
 │   │   │   ├── api/
+│   │   │   ├── auth/
+│   │   │   ├── authorization/
 │   │   │   ├── config/
 │   │   │   └── TgmsApplication.java
 │   │   └── resources/application.properties
@@ -616,11 +618,15 @@ Web-Based-Textile-Garment-Management-System/
 ├── database/
 │   └── migrations/
 │       ├── changes/0000_baseline.sql
+│       ├── changes/20260822181000_create_users.sql
 │       ├── db.changelog-master.xml
 │       └── README.md
 ├── frontend/
 │   ├── src/
 │   │   ├── test/setup.ts
+│   │   ├── api/auth.ts
+│   │   ├── api/roleAccess.ts
+│   │   ├── auth/
 │   │   ├── App.test.tsx
 │   │   ├── App.tsx
 │   │   ├── index.css
@@ -644,7 +650,7 @@ Web-Based-Textile-Garment-Management-System/
 | Frontend | React 19, Vite 8, TypeScript, Tailwind CSS 4, React Router 7, and Axios |
 | Backend/API | Java 17, Spring Boot 4.1.1, Spring MVC, Bean Validation, Maven Wrapper, CORS, and JSON request handling |
 | Database | MySQL, Spring JDBC/HikariCP, Liquibase 5, versioned formatted-SQL changesets, and H2/MySQL-mode migration verification |
-| Authentication | Spring Security with JWT in a secure HttpOnly cookie and bcrypt is the approved future direction; authentication is not implemented in TGMS-1 |
+| Authentication and authorization | Spring Security resource-server validation, bcrypt password hashes, stateless HS256 JWT sessions in an HttpOnly `SameSite=Strict` cookie, reusable method-security role guards, and protected React routes |
 | Package managers | npm workspace and lockfile for the frontend; Maven Wrapper and `pom.xml` for the backend |
 | Environment | `backend/.env.example`; local secrets belong in ignored `backend/.env` |
 | Tests | Vitest and React Testing Library for the UI; JUnit 5, Spring Test, MockMvc, and H2 migration verification for the backend |
@@ -656,8 +662,8 @@ Web-Based-Textile-Garment-Management-System/
 Browser at http://localhost:5173
         │
         ▼
-React foundation page
-        │  Axios GET /api/health
+React public page, /register, or /login
+        │  Axios /api requests (credentials included)
         ▼
 Vite development proxy
         │
@@ -665,13 +671,60 @@ Vite development proxy
 Spring Boot API at http://localhost:3000
         │
         ├── Liquibase applies pending changesets to MySQL at startup
-        └── 200 { "status": "ok", "service": "tgms-api" }
+        ├── AuthService validates accounts and bcrypt passwords
+        └── Spring Security validates JWT session cookies for /api/auth/me
 ```
 
-The frontend displays checking, available, and unavailable API states. Spring Boot
-exposes only the non-business health endpoint and returns a safe JSON `404` for unknown
-API routes. Liquibase currently applies a reversible baseline that creates no domain
-tables. The generic business diagrams above remain the target flow for future tickets.
+The public landing page and health check remain available without a session. Public
+registration always creates a `CUSTOMER`; there is no client-selectable role. Login
+sets a host-only `TGMS_SESSION` HttpOnly cookie and `/api/auth/me` restores the current
+account after reload. Logout expires that cookie. Spring Boot returns one consistent
+JSON error envelope for validation, authentication, and unknown API routes.
+
+## Authentication API Contract
+
+| Method and route | Access | Result |
+|---|---|---|
+| `POST /api/auth/register` | Public | Create one active `CUSTOMER`; returns `201` without starting a session |
+| `POST /api/auth/login` | Public | Verify an active account and set `TGMS_SESSION`; returns `200` |
+| `GET /api/auth/me` | Authenticated | Return the active account represented by the validated JWT subject |
+| `POST /api/auth/logout` | Public/idempotent | Expire `TGMS_SESSION`; returns `200` |
+| `GET /api/health` | Public | Return API availability |
+
+The stable JWT claims are `iss`, `iat`, `exp`, `sub` (the decimal `users.id`), and
+`role`. Clients must not parse the cookie or treat its claims as authorization. TGMS-4
+uses the server-created `ROLE_<role>` authority for endpoint-level RBAC.
+
+## Role-Based Access Contract
+
+Spring method security is enabled globally. Later backend modules protect controllers
+or service methods with the composed annotations in `RoleGuards`:
+
+- `@AdministratorOnly`
+- `@SupplierOnly`
+- `@InventoryManagerOnly`
+- `@ProductionManagerOnly`
+- `@SalesOfficerOnly`
+
+These checks are authoritative. React's `ProtectedRoute` provides early navigation to
+safe 401/403 pages, but every protected API action must still use a server guard.
+Missing or invalid authentication returns `401`; a valid session with the wrong role
+returns `403` using the shared API error envelope.
+
+The following minimal endpoints verify the foundation without implementing business
+module features:
+
+| Protected endpoint | Required role | Protected page |
+|---|---|---|
+| `GET /api/role-access/administrator` | `ADMINISTRATOR` | `/access/administrator` |
+| `GET /api/role-access/supplier` | `SUPPLIER` | `/access/supplier` |
+| `GET /api/role-access/inventory-manager` | `INVENTORY_MANAGER` | `/access/inventory-manager` |
+| `GET /api/role-access/production-manager` | `PRODUCTION_MANAGER` | `/access/production-manager` |
+| `GET /api/role-access/sales-officer` | `SALES_OFFICER` | `/access/sales-officer` |
+
+`/unauthorized` and `/forbidden` are reusable safe client states. TGMS-5 may compose
+these foundations into role navigation and dashboards; this ticket does not add that
+application shell.
 
 ---
 
@@ -710,9 +763,10 @@ command first runs.
 cp backend/.env.example backend/.env
 ```
 
-The checked-in values are development placeholders. Replace the database password and
-JWT secret before their dependent tickets enable database access or authentication.
-The `.env` file is ignored by Git and must never be committed.
+Replace `DB_PASSWORD` and `JWT_SECRET`; the JWT secret must be a random value of at
+least 32 UTF-8 bytes. Keep `COOKIE_SECURE=false` only for local HTTP development and
+set it to `true` when the application is served over HTTPS. `JWT_SESSION_HOURS`
+defaults to `8`. The `.env` file is ignored by Git and must never be committed.
 
 ## 4. Create and Migrate the Database
 
@@ -735,6 +789,8 @@ npm run dev
 
 - Frontend: `http://localhost:5173`
 - API health check: `http://localhost:3000/api/health`
+- Customer registration: `http://localhost:5173/register`
+- Common login: `http://localhost:5173/login`
 
 Stop both servers with `Ctrl+C`.
 
@@ -756,6 +812,10 @@ Stop both servers with `Ctrl+C`.
 
 Migration authoring, safety rules, and database conventions are documented in
 [database/migrations/README.md](database/migrations/README.md).
+
+The committed VS Code workspace disables the Java extension's editor auto-build so it
+cannot overwrite Maven output under `backend/target` while CLI checks are running.
+Use `npm run typecheck` for the authoritative Java and TypeScript compile check.
 
 # Baseline Verification
 
@@ -779,9 +839,9 @@ test failure.
 |---|---|
 | `npm run lint` | Pass |
 | `npm run typecheck` | Pass |
-| `npm test` | Pass: 2 frontend and 4 Spring backend tests |
+| `npm test` | Pass: 17 frontend and 28 Spring backend tests |
 | `npm run build` | Pass: Vite production assets and executable Spring Boot JAR |
-| `npm run db:verify` | Pass: apply, rollback, reapply, and zero domain tables |
+| `npm run db:verify` | Pass: apply, rollback, and reapply both changesets including `users` |
 | `npm audit` | Pass: 0 known vulnerabilities |
 
 ---
