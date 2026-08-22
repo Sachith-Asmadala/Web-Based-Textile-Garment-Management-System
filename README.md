@@ -589,112 +589,208 @@ A feature should be considered complete only when:
 
 ---
 
-# Suggested Repository Structure
+# Current Repository Architecture
 
-The exact folder structure should follow the technology stack selected by the team.
+> TGMS-1 baseline inspected on 2026-08-22 at commit `d1cba2a` on branch `main`.
 
-A clean modular structure may look similar to:
+The original repository contained only this README. Because no technical stack had
+been committed, the approved frontend fallback and the requested Spring Boot backend
+were used to establish a minimal runnable foundation without adding authentication,
+database models, or business-module functionality.
 
 ```text
-textile-garment-management-system/
-│
+Web-Based-Textile-Garment-Management-System/
+├── backend/
+│   ├── .mvn/wrapper/maven-wrapper.properties
+│   ├── src/main/
+│   │   ├── java/lk/ac/sliit/tgms/
+│   │   │   ├── api/
+│   │   │   ├── config/
+│   │   │   └── TgmsApplication.java
+│   │   └── resources/application.properties
+│   ├── src/test/java/lk/ac/sliit/tgms/
+│   ├── .env.example
+│   ├── mvnw
+│   ├── mvnw.cmd
+│   └── pom.xml
+├── database/
+│   └── migrations/
+│       ├── changes/0000_baseline.sql
+│       ├── db.changelog-master.xml
+│       └── README.md
 ├── frontend/
 │   ├── src/
-│   │   ├── components/
-│   │   ├── pages/
-│   │   ├── modules/
-│   │   │   ├── products/
-│   │   │   ├── suppliers/
-│   │   │   ├── inventory/
-│   │   │   ├── orders/
-│   │   │   ├── production/
-│   │   │   └── delivery/
-│   │   ├── services/
-│   │   └── utils/
-│   └── ...
-│
-├── backend/
-│   ├── src/
-│   │   ├── modules/
-│   │   ├── controllers/
-│   │   ├── services/
-│   │   ├── models/
-│   │   ├── middleware/
-│   │   └── routes/
-│   └── ...
-│
-├── database/
-│   ├── migrations/
-│   └── seed/
-│
-├── docs/
-│   ├── diagrams/
-│   ├── use-cases/
-│   └── backlog/
-│
-├── tests/
+│   │   ├── test/setup.ts
+│   │   ├── App.test.tsx
+│   │   ├── App.tsx
+│   │   ├── index.css
+│   │   └── main.tsx
+│   ├── index.html
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── vite.config.ts
+│   └── vitest.config.ts
+├── scripts/
+│   └── run-liquibase.mjs
 ├── .gitignore
-├── README.md
-└── LICENSE
+├── eslint.config.js
+├── package-lock.json
+├── package.json
+└── README.md
 ```
 
-> This is a recommended organizational example only. The final structure should match the actual framework and architecture selected by the team.
+| Area | Current implementation |
+|---|---|
+| Frontend | React 19, Vite 8, TypeScript, Tailwind CSS 4, React Router 7, and Axios |
+| Backend/API | Java 17, Spring Boot 4.1.1, Spring MVC, Bean Validation, Maven Wrapper, CORS, and JSON request handling |
+| Database | MySQL, Spring JDBC/HikariCP, Liquibase 5, versioned formatted-SQL changesets, and H2/MySQL-mode migration verification |
+| Authentication | Spring Security with JWT in a secure HttpOnly cookie and bcrypt is the approved future direction; authentication is not implemented in TGMS-1 |
+| Package managers | npm workspace and lockfile for the frontend; Maven Wrapper and `pom.xml` for the backend |
+| Environment | `backend/.env.example`; local secrets belong in ignored `backend/.env` |
+| Tests | Vitest and React Testing Library for the UI; JUnit 5, Spring Test, MockMvc, and H2 migration verification for the backend |
+| Quality | ESLint and TypeScript checks for React; Maven compile, test, and package checks for Spring Boot |
+
+## Current Application Flow
+
+```text
+Browser at http://localhost:5173
+        │
+        ▼
+React foundation page
+        │  Axios GET /api/health
+        ▼
+Vite development proxy
+        │
+        ▼
+Spring Boot API at http://localhost:3000
+        │
+        ├── Liquibase applies pending changesets to MySQL at startup
+        └── 200 { "status": "ok", "service": "tgms-api" }
+```
+
+The frontend displays checking, available, and unavailable API states. Spring Boot
+exposes only the non-business health endpoint and returns a safe JSON `404` for unknown
+API routes. Liquibase currently applies a reversible baseline that creates no domain
+tables. The generic business diagrams above remain the target flow for future tickets.
 
 ---
 
-# Getting Started
+# Developer Setup
 
-The final installation commands depend on the technology stack selected for implementation.
+## Prerequisites
+
+- Node.js 20.19 or newer
+- npm 11 or a compatible npm version
+- Java 17 or newer
+- MySQL 8 or newer
+- Git
+
+The Maven Wrapper downloads the required Maven version automatically.
 
 ## 1. Clone the Repository
 
 ```bash
-git clone <repository-url>
-cd <repository-folder>
+git clone https://github.com/IT24103430/Web-Based-Textile-Garment-Management-System.git
+cd Web-Based-Textile-Garment-Management-System
 ```
 
-## 2. Configure Environment Variables
-
-Create the required local environment file according to the project's selected backend and database configuration.
+## 2. Install Dependencies
 
 ```bash
-cp .env.example .env
+npm install
 ```
 
-Do not commit secrets, passwords, private keys, or production credentials to Git.
+The root npm workspace installs the frontend dependencies using the committed lockfile.
+The backend dependencies are downloaded automatically by `backend/mvnw` when a backend
+command first runs.
 
-## 3. Install Dependencies
-
-Use the package/dependency manager used by the final project.
+## 3. Configure Local Environment
 
 ```bash
-# Example only
-<install-command>
+cp backend/.env.example backend/.env
 ```
 
-## 4. Configure Database
+The checked-in values are development placeholders. Replace the database password and
+JWT secret before their dependent tickets enable database access or authentication.
+The `.env` file is ignored by Git and must never be committed.
 
-Apply the project's database schema/migrations.
+## 4. Create and Migrate the Database
+
+Create the local `tgms` MySQL database and least-privilege user as documented in
+[database/migrations/README.md](database/migrations/README.md), then run:
 
 ```bash
-# Example only
-<database-migration-command>
+npm run db:status
+npm run db:migrate
 ```
 
-## 5. Start Development Environment
+Do not create application tables manually. Spring Boot also applies pending Liquibase
+changesets during startup.
+
+## 5. Start the Development Servers
 
 ```bash
-# Example only
-<development-command>
+npm run dev
 ```
 
-> Replace the placeholders above once the team's final technology stack and commands are confirmed.
+- Frontend: `http://localhost:5173`
+- API health check: `http://localhost:3000/api/health`
+
+Stop both servers with `Ctrl+C`.
+
+## Available Commands
+
+| Command | Purpose |
+|---|---|
+| `npm run dev` | Start the Spring Boot API and Vite frontend together |
+| `npm run dev:backend` | Start only the Spring Boot API |
+| `npm run lint` | Lint the React workspace |
+| `npm run typecheck` | Type-check React and compile the Spring backend |
+| `npm test` | Run Vitest and Maven/JUnit tests |
+| `npm run build` | Build Vite assets and the executable Spring Boot JAR |
+| `npm run db:status` | Show applied and pending Liquibase changesets |
+| `npm run db:migrate` | Apply pending changesets to the configured MySQL database |
+| `npm run db:rollback:preview` | Preview rollback SQL for the latest changeset |
+| `npm run db:rollback` | Guarded rollback of one changeset in development |
+| `npm run db:verify` | Apply, roll back, and reapply migrations against an isolated test database |
+
+Migration authoring, safety rules, and database conventions are documented in
+[database/migrations/README.md](database/migrations/README.md).
+
+# Baseline Verification
+
+Pre-change baseline checks were performed on 2026-08-22 at commit `d1cba2a`.
+
+| Check | Result |
+|---|---|
+| Repository inventory (`git ls-tree -r --name-only d1cba2a`) | Pass: `README.md` is the only tracked file |
+| Build | Baseline unavailable: no source code, dependency manifest, or build script existed |
+| Automated tests | Baseline unavailable: no test suite, test runner, or test script existed |
+| Lint/static analysis | Baseline unavailable: no lint configuration or script existed |
+| Database migrations | Not available: no database configuration or migrations exist |
+| Application startup | Baseline unavailable: no frontend or backend entry point existed |
+
+The absence of baseline commands was caused by the empty repository, not by a hidden
+test failure.
+
+## Current Verification Status
+
+| Command | Result |
+|---|---|
+| `npm run lint` | Pass |
+| `npm run typecheck` | Pass |
+| `npm test` | Pass: 2 frontend and 4 Spring backend tests |
+| `npm run build` | Pass: Vite production assets and executable Spring Boot JAR |
+| `npm run db:verify` | Pass: apply, rollback, reapply, and zero domain tables |
+| `npm audit` | Pass: 0 known vulnerabilities |
 
 ---
 
 # Testing
 
-Testing should cover both individual modules and the complete end-to-end workflow.
+Tests are colocated with their application: React tests are under `frontend/src`, while
+Spring tests are under `backend/src/test`. Future tickets should add unit, integration,
+failure, and authorization coverage appropriate to their behavior.
 
 ## Important Integration Scenarios
 
