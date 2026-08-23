@@ -12,5 +12,17 @@
 body {
   margin: 0;
   min-width: 320px;
+  min-height: 100vh;
+  background: #020617;
 }
 
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid #5eead4;
+  outline-offset: 3px;
+}

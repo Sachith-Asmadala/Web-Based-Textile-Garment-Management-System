@@ -22,7 +22,7 @@ class DatabaseMigrationTests {
             "jdbc:h2:mem:migration_workflow;MODE=MySQL;DB_CLOSE_DELAY=-1";
 
     @Test
-    void migrationsApplyRollbackAndApplyAgainWithoutBusinessTables() throws Exception {
+    void migrationsApplyRollbackAndApplyAgain() throws Exception {
         try (Connection connection = DriverManager.getConnection(URL, "sa", "")) {
             Database database = DatabaseFactory.getInstance()
                     .findCorrectDatabaseImplementation(new JdbcConnection(connection));
@@ -30,16 +30,26 @@ class DatabaseMigrationTests {
             try (Liquibase liquibase = new Liquibase(
                     CHANGELOG, new ClassLoaderResourceAccessor(), database)) {
                 liquibase.update(new Contexts(), new LabelExpression());
-                assertThat(executedChangeSetCount(connection)).isEqualTo(2);
-                assertThat(applicationTables(connection)).containsExactly("USERS");
+                assertThat(executedChangeSetCount(connection)).isEqualTo(3);
+                assertThat(applicationTables(connection))
+                        .containsExactly(
+                                "GARMENT_CATEGORIES",
+                                "GARMENT_PRODUCTS",
+                                "GARMENT_PRODUCT_VARIANTS",
+                                "USERS");
 
-                liquibase.rollback(2, new Contexts(), new LabelExpression());
+                liquibase.rollback(3, new Contexts(), new LabelExpression());
                 assertThat(executedChangeSetCount(connection)).isZero();
                 assertThat(applicationTables(connection)).isEmpty();
 
                 liquibase.update(new Contexts(), new LabelExpression());
-                assertThat(executedChangeSetCount(connection)).isEqualTo(2);
-                assertThat(applicationTables(connection)).containsExactly("USERS");
+                assertThat(executedChangeSetCount(connection)).isEqualTo(3);
+                assertThat(applicationTables(connection))
+                        .containsExactly(
+                                "GARMENT_CATEGORIES",
+                                "GARMENT_PRODUCTS",
+                                "GARMENT_PRODUCT_VARIANTS",
+                                "USERS");
             }
         }
     }

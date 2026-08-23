@@ -13,16 +13,18 @@ Never make an application schema change with undocumented manual SQL.
 - Automated verification: H2 in MySQL compatibility mode.
 
 TGMS-2's `0000_baseline` changeset establishes the reversible, auditable starting
-point. TGMS-3 adds only the shared `users` account table required by authentication;
-no garment product, supplier, inventory, order, production, or delivery tables exist
-yet. Liquibase also creates its own `DATABASECHANGELOG` and `DATABASECHANGELOGLOCK`
-infrastructure tables; these are not application tables.
+point. TGMS-3 adds the shared `users` account table required by authentication.
+TGMS-10 adds the garment catalog source of truth; supplier, inventory, order,
+production, and delivery tables do not exist yet. Liquibase also creates its own
+`DATABASECHANGELOG` and `DATABASECHANGELOGLOCK` infrastructure tables; these are not
+application tables.
 
 ```text
 database/migrations/
 ├── changes/
 │   ├── 0000_baseline.sql
-│   └── 20260822181000_create_users.sql
+│   ├── 20260822181000_create_users.sql
+│   └── 20260823105000_create_garment_product_catalog.sql
 ├── db.changelog-master.xml
 └── README.md
 ```
@@ -147,6 +149,49 @@ account provisioning belongs to a later approved administrator workflow. Never a
 plaintext passwords, tokens, development users, or staff seed credentials to a
 migration.
 
+## Garment Product Catalog Contract
+
+Garment Product Management owns the catalog tables and their stable IDs:
+
+- `garment_categories` owns category name, description, and active/inactive status.
+- `garment_products` owns the product name, description, category relationship, and
+  `ACTIVE`, `INACTIVE`, or `DISCONTINUED` lifecycle status.
+- `garment_product_variants` owns each sellable size/color combination, its exact
+  `DECIMAL(12,2)` price, and `AVAILABLE`, `UNAVAILABLE`, or `DISCONTINUED` status.
+
+The variant unique constraint prevents duplicate size/color combinations within one
+product. Foreign keys use `RESTRICT` so referenced catalog history cannot be deleted.
+Later modules must reference these records by ID and must not copy them as competing
+master data. An Order item may reference a variant ID, but it must also snapshot the
+accepted selling price so later catalog price changes cannot rewrite order history.
+
+Catalog selection for a new order requires an active category, active product, and
+available variant. Inactive, unavailable, and discontinued rows remain readable for
+historical references. No demo seed data is included because this repository has no
+existing seed workflow.
+
+TGMS-11 creates a product and its first variant in one Spring transaction. Its category
+name is normalized and matched case-insensitively against this source of truth. A
+matching active category is reused by ID; a missing category is created in the same
+transaction; an inactive category is rejected rather than silently reactivated. The
+server fixes new product status to `ACTIVE` and only accepts `AVAILABLE` or
+`UNAVAILABLE` as initial variant availability.
+
+TGMS-12 exposes the public catalog through an application query over these existing
+tables; it adds no schema or seed data. Public visibility requires an `ACTIVE` category,
+an `ACTIVE` product, and an `AVAILABLE` variant. Other lifecycle rows remain stored for
+staff workflows and historical references but are not returned by the public catalog.
+
+TGMS-13 adds parameterized application queries for product-name search and category,
+size, color, and availability filters. It adds no schema change: the existing product
+name and relationship/status indexes support the foundation-stage catalog. Filters
+always narrow the TGMS-12 public row set and never bypass its lifecycle visibility rule.
+
+TGMS-14 reads a single product by its stable `garment_products.id` through the same
+public visibility predicate. It adds no table or index. The public detail response
+includes only active category/product rows with at least one available variant, while
+the existing staff retrieval contract remains available for authorized lifecycle work.
+
 ## TGMS-2 Verification
 
 | Acceptance check | Result |
@@ -162,3 +207,11 @@ migration.
 | Minimum shared schema | Only `users` added; no business-module table added |
 | Repeatable migration | Automated H2/MySQL-mode test applies, rolls back, and reapplies both changesets |
 | Account integrity | Unique email, controlled role check, non-null bcrypt hash/name/active state, and standard timestamps enforced |
+
+## TGMS-10 Verification
+
+| Acceptance check | Result |
+|---|---|
+| Schema applies successfully | Catalog changeset is covered by automated apply, rollback, and reapply verification |
+| Required fields represented | Category, product name, size, color, exact price, controlled status/availability, and timestamps are represented |
+| Stable IDs | Every catalog table has an auto-generated `BIGINT` primary key and later modules reference parent records through foreign keys |

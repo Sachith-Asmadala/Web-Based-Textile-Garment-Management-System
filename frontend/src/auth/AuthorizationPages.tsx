@@ -8,6 +8,7 @@ import {
   type InternalRole,
   type RoleAccessResponse,
 } from "../api/roleAccess";
+import { ErrorState, LoadingState } from "../components/AppStates";
 import { useAuth } from "./useAuth";
 
 function StatePage({
@@ -82,21 +83,23 @@ export function ProtectedRoute({
 
   if (isLoading) {
     return (
-      <StatePage
-        eyebrow="Authorization"
-        message="Your authenticated session is being checked."
-        title="Checking access…"
-      />
+      <div className="mx-auto max-w-3xl p-6 sm:p-10">
+        <LoadingState
+          message="Your authenticated session is being checked."
+          title="Checking access…"
+        />
+      </div>
     );
   }
 
   if (sessionError && !user) {
     return (
-      <StatePage
-        eyebrow="Authorization unavailable"
-        message="Access could not be verified safely. Return to the public page and try again."
-        title="Unable to verify access"
-      />
+      <div className="mx-auto max-w-3xl p-6 sm:p-10">
+        <ErrorState
+          message="Access could not be verified safely. Return to the public page and try again."
+          title="Unable to verify access"
+        />
+      </div>
     );
   }
 
@@ -141,16 +144,19 @@ export function RoleAccessPage({ role }: { role: InternalRole }) {
   }, [role]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 py-12 text-slate-100">
-      <section className="w-full max-w-2xl rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-2xl shadow-black/30 sm:p-12">
+    <div className="mx-auto max-w-4xl p-6 sm:p-10 lg:p-12">
+      <section className="rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-2xl shadow-black/20 sm:p-10">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-400">
           Protected role function
         </p>
         <h1 className="mt-3 text-3xl font-bold tracking-tight">{roleLabel}</h1>
         {state.status === "loading" ? (
-          <p aria-live="polite" className="mt-6 text-slate-300">
-            Confirming server authorization…
-          </p>
+          <div className="mt-6">
+            <LoadingState
+              message="Spring Security is checking the authenticated role."
+              title="Confirming server authorization…"
+            />
+          </div>
         ) : state.status === "success" ? (
           <div className="mt-6 rounded-2xl bg-emerald-950/50 p-5 text-emerald-100">
             <p className="font-semibold">{state.response.message}</p>
@@ -159,9 +165,9 @@ export function RoleAccessPage({ role }: { role: InternalRole }) {
             </p>
           </div>
         ) : (
-          <p className="mt-6 rounded-2xl bg-rose-950/60 p-5 text-rose-200" role="alert">
-            {state.message}
-          </p>
+          <div className="mt-6">
+            <ErrorState message={state.message} title="Authorization check failed" />
+          </div>
         )}
         <p className="mt-6 text-sm leading-6 text-slate-400">
           This page verifies the shared authorization boundary only. Business-module
@@ -174,6 +180,6 @@ export function RoleAccessPage({ role }: { role: InternalRole }) {
           Return home
         </Link>
       </section>
-    </main>
+    </div>
   );
 }

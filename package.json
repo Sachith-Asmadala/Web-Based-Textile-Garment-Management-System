@@ -15,7 +15,8 @@
     "dev:backend": "cd backend && ./mvnw spring-boot:run",
     "build": "npm run build --workspace frontend && npm run build:backend",
     "build:backend": "cd backend && ./mvnw clean package -DskipTests",
-    "test": "npm run test --workspace frontend && npm run test:backend",
+    "test": "npm run test:frontend && npm run test:backend",
+    "test:frontend": "npm run test --workspace frontend",
     "test:backend": "cd backend && ./mvnw clean test",
     "db:status": "dotenv -e backend/.env -- node scripts/run-liquibase.mjs status",
     "db:migrate": "dotenv -e backend/.env -- node scripts/run-liquibase.mjs update",
@@ -24,7 +25,8 @@
     "db:verify": "cd backend && ./mvnw clean -Dtest=DatabaseMigrationTests test",
     "typecheck": "npm run typecheck --workspace frontend && npm run compile:backend",
     "compile:backend": "cd backend && ./mvnw clean compile",
-    "lint": "npm run lint --workspace frontend && eslint scripts"
+    "lint": "npm run lint --workspace frontend && eslint scripts",
+    "verify": "npm run lint && npm run typecheck && npm test && npm run db:verify && npm run build"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -6,6 +6,9 @@ import lk.ac.sliit.tgms.auth.EmailAlreadyRegisteredException;
 import lk.ac.sliit.tgms.auth.InvalidCredentialsException;
 import lk.ac.sliit.tgms.auth.InvalidSessionException;
 import lk.ac.sliit.tgms.auth.PasswordPolicyException;
+import lk.ac.sliit.tgms.product.InactiveProductCategoryException;
+import lk.ac.sliit.tgms.product.ProductNotFoundException;
+import lk.ac.sliit.tgms.product.ProductValidationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -56,6 +59,27 @@ public class ApiExceptionHandler {
             EmailAlreadyRegisteredException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiErrorResponse.of("EMAIL_ALREADY_REGISTERED", exception.getMessage()));
+    }
+
+    @ExceptionHandler(ProductValidationException.class)
+    public ResponseEntity<ApiErrorResponse> productValidation(
+            ProductValidationException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.withFields(
+                        "VALIDATION_ERROR", exception.getMessage(), exception.fields()));
+    }
+
+    @ExceptionHandler(InactiveProductCategoryException.class)
+    public ResponseEntity<ApiErrorResponse> inactiveProductCategory(
+            InactiveProductCategoryException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.of("CATEGORY_INACTIVE", exception.getMessage()));
+    }
+
+    @ExceptionHandler(ProductNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> productNotFound(ProductNotFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiErrorResponse.of("PRODUCT_NOT_FOUND", exception.getMessage()));
     }
 
     @ExceptionHandler({InvalidCredentialsException.class, InvalidSessionException.class})

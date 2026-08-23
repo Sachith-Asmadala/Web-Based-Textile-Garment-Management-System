@@ -7,4 +7,5 @@
 
     <include file="changes/0000_baseline.sql" relativeToChangelogFile="true"/>
     <include file="changes/20260822181000_create_users.sql" relativeToChangelogFile="true"/>
+    <include file="changes/20260823105000_create_garment_product_catalog.sql" relativeToChangelogFile="true"/>
 </databaseChangeLog>

@@ -573,19 +573,17 @@ Done
 
 # Definition of Done
 
-A feature should be considered complete only when:
+A feature is ready for Code Review only when:
 
-- [ ] Required functionality is implemented
-- [ ] Acceptance criteria are satisfied
-- [ ] Input validation is implemented
-- [ ] Role permissions are enforced
-- [ ] Error states are handled
-- [ ] Database changes are documented
-- [ ] Existing functionality is not broken
-- [ ] Relevant tests pass
-- [ ] Code has been reviewed
-- [ ] Documentation is updated
-- [ ] Feature is merged into the shared project branch
+- [ ] Only the active ticket scope is implemented.
+- [ ] Acceptance criteria, validation, backend permissions, errors, and contract changes are documented.
+- [ ] Appropriate success, failure, and authorization tests are included.
+- [ ] Database changes use reversible Liquibase migrations where applicable.
+- [ ] `npm run verify` passes from the repository root.
+- [ ] Manual QA and the pull-request checklist are completed.
+
+The authoritative validation conventions, API error contract, test expectations, and
+full Definition of Done are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
@@ -593,10 +591,10 @@ A feature should be considered complete only when:
 
 > TGMS-1 baseline inspected on 2026-08-22 at commit `d1cba2a` on branch `main`.
 
-The original repository contained only this README. TGMS-1 established the requested
-Spring Boot and React foundation, TGMS-2 added the Liquibase workflow, and TGMS-3 now
-adds the shared customer-registration and authentication contract. No business-module
-functionality has been added.
+The original repository contained only this README. TGMS-1 through TGMS-6 established
+the Spring Boot/React foundation, migration workflow, authentication, authorization,
+shared UI shell, and quality gate. TGMS-10 adds only the garment catalog schema and
+shared types; catalog APIs and UI functionality belong to later tickets.
 
 ```text
 Web-Based-Textile-Garment-Management-System/
@@ -608,6 +606,7 @@ Web-Based-Textile-Garment-Management-System/
 │   │   │   ├── auth/
 │   │   │   ├── authorization/
 │   │   │   ├── config/
+│   │   │   ├── product/
 │   │   │   └── TgmsApplication.java
 │   │   └── resources/application.properties
 │   ├── src/test/java/lk/ac/sliit/tgms/
@@ -619,14 +618,25 @@ Web-Based-Textile-Garment-Management-System/
 │   └── migrations/
 │       ├── changes/0000_baseline.sql
 │       ├── changes/20260822181000_create_users.sql
+│       ├── changes/20260823105000_create_garment_product_catalog.sql
 │       ├── db.changelog-master.xml
 │       └── README.md
 ├── frontend/
 │   ├── src/
 │   │   ├── test/setup.ts
 │   │   ├── api/auth.ts
+│   │   ├── api/products.ts
 │   │   ├── api/roleAccess.ts
 │   │   ├── auth/
+│   │   ├── components/AppStates.tsx
+│   │   ├── dashboard/DashboardPage.tsx
+│   │   ├── layout/AppLayout.tsx
+│   │   ├── navigation/navigation.ts
+│   │   ├── pages/PublicHomePage.tsx
+│   │   ├── products/AddProductPage.tsx
+│   │   ├── products/ProductCatalogPage.tsx
+│   │   ├── products/ProductDetailPage.tsx
+│   │   ├── products/productTypes.ts
 │   │   ├── App.test.tsx
 │   │   ├── App.tsx
 │   │   ├── index.css
@@ -638,7 +648,11 @@ Web-Based-Textile-Garment-Management-System/
 │   └── vitest.config.ts
 ├── scripts/
 │   └── run-liquibase.mjs
+├── .github/
+│   ├── pull_request_template.md
+│   └── workflows/quality.yml
 ├── .gitignore
+├── CONTRIBUTING.md
 ├── eslint.config.js
 ├── package-lock.json
 ├── package.json
@@ -662,7 +676,7 @@ Web-Based-Textile-Garment-Management-System/
 Browser at http://localhost:5173
         │
         ▼
-React public page, /register, or /login
+React public page, shared application shell, role dashboard, /register, or /login
         │  Axios /api requests (credentials included)
         ▼
 Vite development proxy
@@ -722,9 +736,106 @@ module features:
 | `GET /api/role-access/production-manager` | `PRODUCTION_MANAGER` | `/access/production-manager` |
 | `GET /api/role-access/sales-officer` | `SALES_OFFICER` | `/access/sales-officer` |
 
-`/unauthorized` and `/forbidden` are reusable safe client states. TGMS-5 may compose
-these foundations into role navigation and dashboards; this ticket does not add that
-application shell.
+`/unauthorized` and `/forbidden` are reusable safe client states. Hiding navigation is
+only a usability measure; the protected Spring endpoints retain the role guards above.
+
+## Shared Application Shell
+
+`AppLayout` provides the common sticky header, responsive sidebar, account identity,
+logout action, and nested page outlet. `getNavigationItems` is the single frontend
+policy for visible navigation. Guests see only public overview/authentication links;
+authenticated users see only their own dashboard, and internal users additionally see
+their own server authorization-check link. It must not be used as a substitute for a
+backend `RoleGuards` annotation.
+
+The placeholder dashboard routes are:
+
+| Role | Dashboard route |
+|---|---|
+| `ADMINISTRATOR` | `/dashboard/administrator` |
+| `SUPPLIER` | `/dashboard/supplier` |
+| `INVENTORY_MANAGER` | `/dashboard/inventory-manager` |
+| `PRODUCTION_MANAGER` | `/dashboard/production-manager` |
+| `SALES_OFFICER` | `/dashboard/sales-officer` |
+| `CUSTOMER` | `/dashboard/customer` |
+
+Every dashboard route is wrapped by `ProtectedRoute` with its exact role. The pages
+deliberately show empty placeholders and do not invent module data. Later UI tickets
+can reuse `LoadingState`, `EmptyState`, `ErrorState`, and `NotFoundPage` from
+`components/AppStates.tsx` inside the shell.
+
+## Add Garment Product Contract
+
+TGMS-11 adds the Sales Officer-only `/products/new` form. The navigation link and
+React route are role-filtered for usability, while `@SalesOfficerOnly` on the Spring
+write and by-ID retrieval methods is the authoritative permission check.
+
+| Method and route | Access | Result |
+|---|---|---|
+| `POST /api/products` | `SALES_OFFICER` | Atomically create an active product and its first size/color variant; returns `201` and a `Location` header |
+| `GET /api/products/{productId}` | `SALES_OFFICER` | Retrieve the saved product, category, and variants by stable product ID |
+
+The create request accepts `name`, `category`, `size`, `color`, `price`, and
+`availability`. New availability is restricted to `AVAILABLE` or `UNAVAILABLE`; a new
+product cannot be created as discontinued. Exact prices are validated with Java
+`BigDecimal`, stored as `DECIMAL(12,2)`, and serialized to the frontend as strings.
+
+Category input is normalized before use. An existing active category with a
+case-insensitive matching name is referenced by ID; otherwise the service creates one
+category record in the same transaction. An inactive category returns `409
+CATEGORY_INACTIVE` and is never silently reactivated. Validation uses the shared
+`VALIDATION_ERROR` envelope, missing products return `404 PRODUCT_NOT_FOUND`, and
+authentication/role failures retain the shared `401`/`403` behavior.
+
+## Public Garment Catalog Contract
+
+TGMS-12 adds the public `/products` page and the dedicated product catalog query. The
+route is linked for guests and every authenticated role. It reuses the shared loading,
+empty, and error panels and offers an explicit Retry action after a failed request.
+
+| Method and route | Access | Result |
+|---|---|---|
+| `GET /api/products` | Public, including guests | Return active products in active categories, with only `AVAILABLE` variants |
+
+The server owns the visibility rule: an inactive or discontinued product, a product in
+an inactive category, and every unavailable or discontinued variant are excluded from
+the public response. A product with no remaining available variant is therefore also
+excluded. Results are ordered by category name, product name, stable product ID, and
+variant ID. The response uses the existing product/category/variant representation, so
+later consumers can retain the stable IDs without creating duplicate catalog data.
+
+Pagination was not added in this ticket because the current application has no shared
+pagination contract and the catalog is still a foundation-stage dataset. The service
+boundary permits pagination to be added backward-compatibly when measured catalog size
+requires it.
+
+TGMS-13 extends this endpoint with optional `search`, `category`, `size`, `color`, and
+`availability` query parameters. Product-name search is a case-insensitive substring
+match. Category, size, and color are normalized and matched case-insensitively as exact
+values. Multiple parameters are combined with `AND`, and omitting all parameters
+restores the complete permitted catalog.
+
+Filter text uses the same schema lengths as its underlying field. Availability accepts
+only `AVAILABLE`, `UNAVAILABLE`, or `DISCONTINUED`; invalid values return the shared
+`400 VALIDATION_ERROR` response. TGMS-12 visibility is applied before every filter, so
+requesting an unavailable or discontinued status cannot reveal a non-public variant.
+The `/products` form submits these filters to the backend, supports clearing them, and
+distinguishes an empty catalog from a filtered query with no matches.
+
+TGMS-14 adds the public `/products/:productId` detail page and an additive visibility-
+safe API:
+
+| Method and route | Access | Result |
+|---|---|---|
+| `GET /api/products/catalog/{productId}` | Public, including guests | Return one publicly permitted product, its category, and available variants by stable ID |
+
+This endpoint deliberately remains separate from the existing Sales Officer-only
+`GET /api/products/{productId}` contract. Invalid and non-positive IDs return the shared
+`400 VALIDATION_ERROR`; missing, inactive, discontinued, inactive-category, and
+unavailable-only products return `404 PRODUCT_NOT_FOUND` without revealing lifecycle
+details. The page displays the stored name, descriptions, category, stable product ID,
+sizes, colors, exact decimal price strings, product status, and variant availability,
+with navigation back to the catalog.
 
 ---
 
@@ -791,6 +902,7 @@ npm run dev
 - API health check: `http://localhost:3000/api/health`
 - Customer registration: `http://localhost:5173/register`
 - Common login: `http://localhost:5173/login`
+- Public garment catalog: `http://localhost:5173/products`
 
 Stop both servers with `Ctrl+C`.
 
@@ -803,12 +915,15 @@ Stop both servers with `Ctrl+C`.
 | `npm run lint` | Lint the React workspace |
 | `npm run typecheck` | Type-check React and compile the Spring backend |
 | `npm test` | Run Vitest and Maven/JUnit tests |
+| `npm run test:frontend` | Run only Vitest and React Testing Library tests |
+| `npm run test:backend` | Run only Maven/JUnit/MockMvc tests |
 | `npm run build` | Build Vite assets and the executable Spring Boot JAR |
 | `npm run db:status` | Show applied and pending Liquibase changesets |
 | `npm run db:migrate` | Apply pending changesets to the configured MySQL database |
 | `npm run db:rollback:preview` | Preview rollback SQL for the latest changeset |
 | `npm run db:rollback` | Guarded rollback of one changeset in development |
 | `npm run db:verify` | Apply, roll back, and reapply migrations against an isolated test database |
+| `npm run verify` | Run the complete lint, compile, test, migration, and build quality gate |
 
 Migration authoring, safety rules, and database conventions are documented in
 [database/migrations/README.md](database/migrations/README.md).
@@ -816,6 +931,18 @@ Migration authoring, safety rules, and database conventions are documented in
 The committed VS Code workspace disables the Java extension's editor auto-build so it
 cannot overwrite Maven output under `backend/target` while CLI checks are running.
 Use `npm run typecheck` for the authoritative Java and TypeScript compile check.
+
+## Pull-request quality gate
+
+Run `npm run verify` before every handoff. GitHub Actions runs that same command for
+pull requests and pushes to `main` using Node.js 24, npm 11.16.0, and Java 17. The
+workflow needs no application secrets because migration verification uses the isolated
+test database and the build does not start the application.
+
+Every pull request receives the shared checklist from
+[.github/pull_request_template.md](.github/pull_request_template.md). See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the API error envelope, Jakarta input-validation
+rules, test expectations, source-of-truth conventions, and full Definition of Done.
 
 # Baseline Verification
 
@@ -839,9 +966,10 @@ test failure.
 |---|---|
 | `npm run lint` | Pass |
 | `npm run typecheck` | Pass |
-| `npm test` | Pass: 17 frontend and 28 Spring backend tests |
+| `npm test` | Pass: 50 frontend and 42 Spring backend tests |
 | `npm run build` | Pass: Vite production assets and executable Spring Boot JAR |
-| `npm run db:verify` | Pass: apply, rollback, and reapply both changesets including `users` |
+| `npm run db:verify` | Pass: apply, rollback, and reapply all three changesets including the garment catalog |
+| `npm run verify` | Pass: complete local pull-request quality gate |
 | `npm audit` | Pass: 0 known vulnerabilities |
 
 ---
@@ -854,8 +982,10 @@ failure, and authorization coverage appropriate to their behavior.
 
 ## Important Integration Scenarios
 
-- [ ] Create garment product
-- [ ] Browse and search products
+- [x] Create garment product
+- [x] Browse products
+- [x] Search products
+- [x] View product details
 - [ ] Create supplier and supply information
 - [ ] Add supplied material to inventory
 - [ ] Update received/used inventory quantity
