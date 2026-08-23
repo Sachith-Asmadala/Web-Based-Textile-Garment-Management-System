@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import lk.ac.sliit.tgms.authorization.RoleGuards.SalesOfficerOnly;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -94,6 +95,15 @@ public class ProductController {
                 "Garment product updated successfully.", ProductResponse.from(details));
     }
 
+    @DeleteMapping("/{productId}")
+    @SalesOfficerOnly
+    public DiscontinueProductResponse discontinue(@PathVariable String productId) {
+        GarmentProductDetails details = productService.discontinueProduct(
+                parseProductId(productId));
+        return new DiscontinueProductResponse(
+                "Garment product discontinued successfully.", ProductResponse.from(details));
+    }
+
     private long parseProductId(String productId) {
         try {
             return Long.parseLong(productId);
@@ -155,6 +165,8 @@ public class ProductController {
                     CreateProductAvailability availability) {}
 
     public record UpdateProductResponse(String message, ProductResponse product) {}
+
+    public record DiscontinueProductResponse(String message, ProductResponse product) {}
 
     public record ProductResponse(
             long id,

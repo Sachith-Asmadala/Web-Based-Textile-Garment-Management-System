@@ -593,8 +593,9 @@ full Definition of Done are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 The original repository contained only this README. TGMS-1 through TGMS-6 established
 the Spring Boot/React foundation, migration workflow, authentication, authorization,
-shared UI shell, and quality gate. TGMS-10 adds only the garment catalog schema and
-shared types; catalog APIs and UI functionality belong to later tickets.
+shared UI shell, and quality gate. TGMS-10 through TGMS-16 add the garment catalog
+schema and the scoped create, browse, search, detail, update, and discontinue workflows.
+TGMS-20 adds the Supplier Management identity/contact schema boundary.
 
 ```text
 Web-Based-Textile-Garment-Management-System/
@@ -607,6 +608,7 @@ Web-Based-Textile-Garment-Management-System/
 │   │   │   ├── authorization/
 │   │   │   ├── config/
 │   │   │   ├── product/
+│   │   │   ├── supplier/
 │   │   │   └── TgmsApplication.java
 │   │   └── resources/application.properties
 │   ├── src/test/java/lk/ac/sliit/tgms/
@@ -619,6 +621,7 @@ Web-Based-Textile-Garment-Management-System/
 │       ├── changes/0000_baseline.sql
 │       ├── changes/20260822181000_create_users.sql
 │       ├── changes/20260823105000_create_garment_product_catalog.sql
+│       ├── changes/20260823120500_create_supplier_profiles.sql
 │       ├── db.changelog-master.xml
 │       └── README.md
 ├── frontend/
@@ -634,8 +637,10 @@ Web-Based-Textile-Garment-Management-System/
 │   │   ├── navigation/navigation.ts
 │   │   ├── pages/PublicHomePage.tsx
 │   │   ├── products/AddProductPage.tsx
+│   │   ├── products/EditProductPage.tsx
 │   │   ├── products/ProductCatalogPage.tsx
 │   │   ├── products/ProductDetailPage.tsx
+│   │   ├── products/productForm.ts
 │   │   ├── products/productTypes.ts
 │   │   ├── App.test.tsx
 │   │   ├── App.tsx
@@ -837,6 +842,105 @@ details. The page displays the stored name, descriptions, category, stable produ
 sizes, colors, exact decimal price strings, product status, and variant availability,
 with navigation back to the catalog.
 
+## Update Garment Product Contract
+
+TGMS-15 adds the Sales Officer-only `/products/:productId/edit` page. It loads the
+complete staff record through the existing protected by-ID endpoint, preloads the
+stored product/category values and one explicitly selected variant, and reuses the
+same client and service validation rules as product creation.
+
+| Method and route | Access | Result |
+|---|---|---|
+| `PUT /api/products/{productId}` | `SALES_OFFICER` | Atomically update product name/category and one owned size/color/price/availability variant; returns `200` with refreshed details |
+
+The request adds the required stable `variantId` to the existing `name`, `category`,
+`size`, `color`, `price`, and `availability` fields. The service verifies that the
+variant belongs to the path product before writing. Product and variant primary keys,
+variant ownership, product description, and product lifecycle status remain unchanged;
+both affected `updated_at` timestamps are advanced explicitly. A size/color collision
+is returned through the shared field-level `400 VALIDATION_ERROR` contract, and all
+writes roll back together.
+
+Discontinued variants are deliberately excluded from this information-maintenance
+form and rejected by the server because lifecycle transitions use the separate TGMS-16
+action below. A successful response replaces the editor's local state. Catalog and
+detail routes do not retain a product cache, so navigating to either route issues a
+fresh permitted query and shows the saved values when the product remains public.
+
+## Product Discontinuation and Order Handoff Contract
+
+TGMS-16 completes the Product Management lifecycle with a safe, Sales Officer-only
+discontinuation action. The edit page requires an explicit second confirmation before
+calling the backend and shows retryable error feedback if the request fails.
+
+| Method and route | Access | Result |
+|---|---|---|
+| `DELETE /api/products/{productId}` | `SALES_OFFICER` | Atomically mark the product and every owned variant `DISCONTINUED`; return `200` with the retained complete record |
+
+This endpoint is intentionally a soft delete. It never deletes rows or changes product
+or variant IDs, so future order foreign keys and historical records remain valid. The
+operation is safe to repeat. Discontinued records stay available through the protected
+staff by-ID endpoint, but the public catalog/list/detail queries continue to exclude
+them.
+
+Order Management must use the Product module as the product source of truth. Before a
+new order line is saved, call:
+
+```java
+OrderProductSelection selection = productService.requireOrderSelectableVariant(
+        productId, variantId);
+```
+
+The caller supplies the stable `garment_products.id` and
+`garment_product_variants.id`. A successful `OrderProductSelection` contains:
+
+| Field | Contract |
+|---|---|
+| `productId` / `variantId` | Stable catalog IDs; the variant is verified to belong to the product |
+| `productName` | Current display name from Product Management |
+| `categoryId` / `categoryName` | Current category identity and display name |
+| `size` / `color` | Authoritative selected variant representation; do not accept client replacements |
+| `currentPrice` | Authoritative `BigDecimal` price from the selected variant; do not trust a client-supplied price |
+| `availability` | `AVAILABLE` on every successful result |
+
+Selection succeeds only when the category and product are `ACTIVE` and the owned
+variant is `AVAILABLE`. Missing, mismatched, unavailable, or discontinued selections
+throw `ProductNotSelectableException`; the shared API mapping is `409
+PRODUCT_NOT_SELECTABLE`. The future Order service should call this method immediately
+before persisting its own order line in its transaction, reference the stable IDs, and
+store any required historical price/name snapshot in Order-owned columns. It must not
+duplicate live catalog source-of-truth fields or infer selectability from public UI
+visibility alone.
+
+No Order Management table, endpoint, or order-creation behavior is added by TGMS-16;
+those remain owned by the later Order module. This handoff supplies its reusable
+server-side validation boundary without inventing that module prematurely.
+
+## Supplier Profile Schema Contract
+
+TGMS-20 introduces only the Supplier Management profile boundary; it does not add
+supplier CRUD pages, APIs, supply records, or Inventory Management behavior.
+
+| Table/field | Contract |
+|---|---|
+| `supplier_profiles.id` | Stable generated `BIGINT` supplier ID for later cross-module references |
+| `supplier_profiles.user_id` | Required unique foreign key to `users.id`; one account has at most one supplier profile |
+| `business_name` | Required supplier business identity, maximum 160 characters |
+| `contact_phone` | Required contact number, maximum 32 characters |
+| `address` | Required supplier contact address, maximum 500 characters |
+| `created_at` / `updated_at` | Required UTC-compatible `TIMESTAMP(6)` audit timestamps |
+
+The foreign key uses restrictive update/delete behavior so authenticated accounts and
+referenced supplier history cannot be detached. `users` remains the source of truth
+for account-holder name, login email, password hash, role, and active state; none are
+copied into `supplier_profiles`. A future profile-creation service must validate that
+the linked account role is `SUPPLIER`, because a database check constraint cannot read
+another table.
+
+Supply and Inventory modules must store `supplier_profiles.id` as `supplier_id` and
+resolve current supplier identity/contact data through Supplier Management. They must
+not duplicate `business_name`, `contact_phone`, or `address` as competing master data.
+
 ---
 
 # Developer Setup
@@ -966,9 +1070,9 @@ test failure.
 |---|---|
 | `npm run lint` | Pass |
 | `npm run typecheck` | Pass |
-| `npm test` | Pass: 50 frontend and 42 Spring backend tests |
+| `npm test` | Pass: 55 frontend and 49 Spring backend tests |
 | `npm run build` | Pass: Vite production assets and executable Spring Boot JAR |
-| `npm run db:verify` | Pass: apply, rollback, and reapply all three changesets including the garment catalog |
+| `npm run db:verify` | Pass: apply, rollback, and reapply all four changesets including supplier profiles |
 | `npm run verify` | Pass: complete local pull-request quality gate |
 | `npm audit` | Pass: 0 known vulnerabilities |
 
@@ -986,6 +1090,9 @@ failure, and authorization coverage appropriate to their behavior.
 - [x] Browse products
 - [x] Search products
 - [x] View product details
+- [x] Update product information without changing stable IDs
+- [x] Discontinue products while retaining stable IDs and blocking new-order selection
+- [x] Define stable supplier profile schema and authenticated-account relationship
 - [ ] Create supplier and supply information
 - [ ] Add supplied material to inventory
 - [ ] Update received/used inventory quantity

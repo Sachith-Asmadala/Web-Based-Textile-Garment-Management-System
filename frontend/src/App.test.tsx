@@ -16,11 +16,13 @@ import {
 import { getRoleAccess, type InternalRole } from "./api/roleAccess";
 import {
   createProduct,
+  discontinueProduct,
   getCatalogProduct,
   getCatalogProducts,
   getProduct,
   updateProduct,
   type CreateProductResponse,
+  type DiscontinueProductResponse,
   type UpdateProductResponse,
 } from "./api/products";
 import {
@@ -55,6 +57,7 @@ vi.mock("./api/roleAccess", () => ({
 }));
 vi.mock("./api/products", () => ({
   createProduct: vi.fn(),
+  discontinueProduct: vi.fn(),
   getCatalogProduct: vi.fn(),
   getCatalogProducts: vi.fn(),
   getProduct: vi.fn(),
@@ -79,6 +82,7 @@ const mockedLogoutUser = vi.mocked(logoutUser);
 const mockedRegisterCustomer = vi.mocked(registerCustomer);
 const mockedGetRoleAccess = vi.mocked(getRoleAccess);
 const mockedCreateProduct = vi.mocked(createProduct);
+const mockedDiscontinueProduct = vi.mocked(discontinueProduct);
 const mockedGetCatalogProduct = vi.mocked(getCatalogProduct);
 const mockedGetCatalogProducts = vi.mocked(getCatalogProducts);
 const mockedGetProduct = vi.mocked(getProduct);
@@ -157,6 +161,18 @@ const updatedProductResponse: UpdateProductResponse = {
         status: "UNAVAILABLE",
       },
     ],
+  },
+};
+
+const discontinuedProductResponse: DiscontinueProductResponse = {
+  message: "Garment product discontinued successfully.",
+  product: {
+    ...catalogProduct,
+    status: "DISCONTINUED",
+    variants: catalogProduct.variants.map((variant) => ({
+      ...variant,
+      status: "DISCONTINUED",
+    })),
   },
 };
 
@@ -532,6 +548,49 @@ describe("App authentication", () => {
     expect(await screen.findByRole("heading", { name: "Access forbidden" }))
       .toBeInTheDocument();
     expect(mockedGetProduct).not.toHaveBeenCalled();
+  });
+
+  it("requires confirmation before discontinuing and preserves the product record", async () => {
+    mockedGetCurrentUser.mockResolvedValue({ ...customer, role: "SALES_OFFICER" });
+    mockedDiscontinueProduct.mockResolvedValue(discontinuedProductResponse);
+    const user = userEvent.setup();
+    renderApp(getEditProductPagePath(catalogProduct.id));
+
+    await screen.findByRole("heading", { name: "Edit garment product" });
+    await user.click(screen.getByRole("button", { name: "Discontinue product" }));
+
+    expect(mockedDiscontinueProduct).not.toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog", { name: "Confirm product discontinuation" }))
+      .toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Keep product active" }));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Discontinue product" }));
+    await user.click(screen.getByRole("button", { name: "Confirm discontinuation" }));
+
+    expect(await screen.findByRole("heading", { name: "Product discontinued" }))
+      .toBeInTheDocument();
+    expect(screen.getByText(/historical references/i))
+      .toHaveTextContent(`Product ID ${catalogProduct.id}`);
+    expect(mockedDiscontinueProduct).toHaveBeenCalledWith(catalogProduct.id);
+  });
+
+  it("keeps confirmation available when discontinuation fails", async () => {
+    mockedGetCurrentUser.mockResolvedValue({ ...customer, role: "SALES_OFFICER" });
+    mockedDiscontinueProduct.mockRejectedValue(new Error("Lifecycle service unavailable."));
+    const user = userEvent.setup();
+    renderApp(getEditProductPagePath(catalogProduct.id));
+
+    await screen.findByRole("heading", { name: "Edit garment product" });
+    await user.click(screen.getByRole("button", { name: "Discontinue product" }));
+    await user.click(screen.getByRole("button", { name: "Confirm discontinuation" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Lifecycle service unavailable.",
+    );
+    expect(screen.getByRole("alertdialog", { name: "Confirm product discontinuation" }))
+      .toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirm discontinuation" })).toBeEnabled();
   });
 
   it("shows the reusable loading state while the public catalog is fetched", () => {

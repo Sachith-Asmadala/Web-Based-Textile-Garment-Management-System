@@ -29,6 +29,10 @@ public interface ProductRepository {
             BigDecimal price,
             VariantStatus status);
 
+    int discontinueProduct(long productId);
+
+    int discontinueVariants(long productId);
+
     Optional<GarmentProductDetails> findProductById(long productId);
 
     Optional<GarmentProductDetails> findPublicCatalogProductById(long productId);

@@ -123,6 +123,60 @@ public class ProductService {
                         "Updated garment product could not be read back."));
     }
 
+    @Transactional
+    public GarmentProductDetails discontinueProduct(long productId) {
+        validateProductId(productId);
+        GarmentProductDetails existing = productRepository.findProductById(productId)
+                .orElseThrow(ProductNotFoundException::new);
+
+        long variantsToDiscontinue = existing.variants().stream()
+                .filter(variant -> variant.status() != VariantStatus.DISCONTINUED)
+                .count();
+        int discontinuedVariants = productRepository.discontinueVariants(productId);
+        int discontinuedProducts = productRepository.discontinueProduct(productId);
+        int expectedProductUpdates = existing.product().status() == ProductStatus.DISCONTINUED
+                ? 0
+                : 1;
+        if (discontinuedVariants != variantsToDiscontinue
+                || discontinuedProducts != expectedProductUpdates) {
+            throw new IllegalStateException(
+                    "Garment product discontinuation affected an unexpected row count.");
+        }
+
+        return productRepository.findProductById(productId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Discontinued garment product could not be read back."));
+    }
+
+    @Transactional(readOnly = true)
+    public OrderProductSelection requireOrderSelectableVariant(
+            long productId, long variantId) {
+        validateProductId(productId);
+        validateVariantId(variantId);
+        GarmentProductDetails details = productRepository.findProductById(productId)
+                .orElseThrow(ProductNotSelectableException::new);
+        if (details.category().status() != CategoryStatus.ACTIVE
+                || details.product().status() != ProductStatus.ACTIVE) {
+            throw new ProductNotSelectableException();
+        }
+
+        ProductVariant variant = details.variants().stream()
+                .filter(candidate -> candidate.id() == variantId)
+                .filter(candidate -> candidate.status() == VariantStatus.AVAILABLE)
+                .findFirst()
+                .orElseThrow(ProductNotSelectableException::new);
+        return new OrderProductSelection(
+                details.product().id(),
+                variant.id(),
+                details.product().name(),
+                details.category().id(),
+                details.category().name(),
+                variant.size(),
+                variant.color(),
+                variant.price(),
+                variant.status());
+    }
+
     @Transactional(readOnly = true)
     public GarmentProductDetails getProduct(long productId) {
         validateProductId(productId);

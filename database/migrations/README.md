@@ -14,17 +14,18 @@ Never make an application schema change with undocumented manual SQL.
 
 TGMS-2's `0000_baseline` changeset establishes the reversible, auditable starting
 point. TGMS-3 adds the shared `users` account table required by authentication.
-TGMS-10 adds the garment catalog source of truth; supplier, inventory, order,
-production, and delivery tables do not exist yet. Liquibase also creates its own
-`DATABASECHANGELOG` and `DATABASECHANGELOGLOCK` infrastructure tables; these are not
-application tables.
+TGMS-10 adds the garment catalog source of truth, and TGMS-20 adds the supplier profile
+source of truth. Inventory, supply, order, production, and delivery tables do not exist
+yet. Liquibase also creates its own `DATABASECHANGELOG` and `DATABASECHANGELOGLOCK`
+infrastructure tables; these are not application tables.
 
 ```text
 database/migrations/
 ├── changes/
 │   ├── 0000_baseline.sql
 │   ├── 20260822181000_create_users.sql
-│   └── 20260823105000_create_garment_product_catalog.sql
+│   ├── 20260823105000_create_garment_product_catalog.sql
+│   └── 20260823120500_create_supplier_profiles.sql
 ├── db.changelog-master.xml
 └── README.md
 ```
@@ -149,6 +150,25 @@ account provisioning belongs to a later approved administrator workflow. Never a
 plaintext passwords, tokens, development users, or staff seed credentials to a
 migration.
 
+## Supplier Profile Contract
+
+Supplier Management owns `supplier_profiles`. Its generated `id` is the stable
+supplier identifier that later Supply and Inventory records must reference as
+`supplier_id`. Each profile contains required `business_name`, `contact_phone`, and
+`address` values plus the standard timestamps.
+
+`supplier_profiles.user_id` is a required, unique foreign key to `users.id`, giving one
+authenticated account at most one supplier profile. The relationship uses
+`ON UPDATE RESTRICT ON DELETE RESTRICT` to preserve supplier history. Account-holder
+name, login email, password hash, role, and active state remain in `users` and are not
+duplicated in the supplier table.
+
+The database guarantees account existence and one-to-one profile ownership. A future
+Supplier service must additionally verify that a linked account has the controlled
+`SUPPLIER` role before creating a profile; SQL `CHECK` constraints cannot reference a
+different table. Deactivating an account does not delete its supplier identity or
+historical references. No supplier seed data is included.
+
 ## Garment Product Catalog Contract
 
 Garment Product Management owns the catalog tables and their stable IDs:
@@ -215,3 +235,13 @@ the existing staff retrieval contract remains available for authorized lifecycle
 | Schema applies successfully | Catalog changeset is covered by automated apply, rollback, and reapply verification |
 | Required fields represented | Category, product name, size, color, exact price, controlled status/availability, and timestamps are represented |
 | Stable IDs | Every catalog table has an auto-generated `BIGINT` primary key and later modules reference parent records through foreign keys |
+
+## TGMS-20 Verification
+
+| Acceptance check | Result |
+|---|---|
+| Stable supplier ID | `supplier_profiles.id` is an auto-generated `BIGINT` primary key |
+| Authenticated relationship | Required unique `user_id` references `users.id` with restrictive update/delete behavior |
+| Contact/profile integrity | Business name, contact phone, address, and both timestamps are required; blank-value checks are enforced |
+| Credential ownership | Email, password hash, role, active state, and account-holder name remain exclusively in `users` |
+| Repeatable migration | Automated tests apply, roll back, and reapply all four changesets |

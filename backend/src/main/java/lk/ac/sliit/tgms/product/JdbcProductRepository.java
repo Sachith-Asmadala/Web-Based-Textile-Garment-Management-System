@@ -172,6 +172,28 @@ public class JdbcProductRepository implements ProductRepository {
     }
 
     @Override
+    public int discontinueProduct(long productId) {
+        return jdbcTemplate.update(
+                """
+                UPDATE garment_products
+                SET status = 'DISCONTINUED', updated_at = CURRENT_TIMESTAMP(6)
+                WHERE id = ? AND status <> 'DISCONTINUED'
+                """,
+                productId);
+    }
+
+    @Override
+    public int discontinueVariants(long productId) {
+        return jdbcTemplate.update(
+                """
+                UPDATE garment_product_variants
+                SET status = 'DISCONTINUED', updated_at = CURRENT_TIMESTAMP(6)
+                WHERE product_id = ? AND status <> 'DISCONTINUED'
+                """,
+                productId);
+    }
+
+    @Override
     public Optional<GarmentProductDetails> findProductById(long productId) {
         return jdbcTemplate.query(PRODUCT_DETAILS_QUERY, resultSet -> {
             if (!resultSet.next()) {

@@ -1,7 +1,9 @@
 package lk.ac.sliit.tgms.product;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -38,6 +40,9 @@ class ProductApiIntegrationTests {
 
     @Autowired
     private AuthTokenService authTokenService;
+
+    @Autowired
+    private ProductService productService;
 
     private MockMvc mockMvc;
 
@@ -199,6 +204,15 @@ class ProductApiIntegrationTests {
         mockMvc.perform(put("/api/products/1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validProductUpdate(1, "Casual Wear")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+
+        mockMvc.perform(delete("/api/products/1")
+                        .cookie(sessionFor(UserRole.CUSTOMER)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
+
+        mockMvc.perform(delete("/api/products/1"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
     }
@@ -455,6 +469,108 @@ class ProductApiIntegrationTests {
                         BigDecimal.class,
                         3403))
                 .isEqualByComparingTo("6990.00");
+    }
+
+    @Test
+    void updateRejectsVariantOwnedByAnotherProduct() throws Exception {
+        insertCategory(1404, "Sportswear", CategoryStatus.ACTIVE);
+        insertProduct(2403, 1404, "Training Tee", ProductStatus.ACTIVE);
+        insertProduct(2404, 1404, "Running Tee", ProductStatus.ACTIVE);
+        insertVariant(3404, 2403, "M", "Red", "2490.00", VariantStatus.AVAILABLE);
+        insertVariant(3405, 2404, "M", "Blue", "2590.00", VariantStatus.AVAILABLE);
+
+        mockMvc.perform(put("/api/products/2403")
+                        .cookie(sessionFor(UserRole.SALES_OFFICER))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validProductUpdate(3405, "Sportswear")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.error.fields.variantId")
+                        .value("The selected variant does not belong to this product."));
+
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT name FROM garment_products WHERE id = ?", String.class, 2403))
+                .isEqualTo("Training Tee");
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT product_id FROM garment_product_variants WHERE id = ?",
+                        Long.class,
+                        3405))
+                .isEqualTo(2404L);
+    }
+
+    @Test
+    void discontinuationPreservesHistoryAndBlocksNewOrderSelection() throws Exception {
+        insertCategory(1501, "Workwear", CategoryStatus.ACTIVE);
+        insertProduct(2501, 1501, "Utility Shirt", ProductStatus.ACTIVE);
+        insertVariant(3501, 2501, "M", "Stone", "4590.00", VariantStatus.AVAILABLE);
+        insertVariant(3502, 2501, "L", "Stone", "4690.00", VariantStatus.UNAVAILABLE);
+
+        OrderProductSelection selection = productService.requireOrderSelectableVariant(2501, 3501);
+        assertThat(selection.productId()).isEqualTo(2501);
+        assertThat(selection.variantId()).isEqualTo(3501);
+        assertThat(selection.productName()).isEqualTo("Utility Shirt");
+        assertThat(selection.categoryId()).isEqualTo(1501);
+        assertThat(selection.categoryName()).isEqualTo("Workwear");
+        assertThat(selection.size()).isEqualTo("M");
+        assertThat(selection.color()).isEqualTo("Stone");
+        assertThat(selection.currentPrice()).isEqualByComparingTo("4590.00");
+        assertThat(selection.availability()).isEqualTo(VariantStatus.AVAILABLE);
+
+        Cookie salesOfficer = sessionFor(UserRole.SALES_OFFICER);
+        mockMvc.perform(delete("/api/products/2501").cookie(salesOfficer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message")
+                        .value("Garment product discontinued successfully."))
+                .andExpect(jsonPath("$.product.id").value(2501))
+                .andExpect(jsonPath("$.product.status").value("DISCONTINUED"))
+                .andExpect(jsonPath("$.product.variants.length()").value(2))
+                .andExpect(jsonPath("$.product.variants[*].status")
+                        .value(Matchers.everyItem(Matchers.is("DISCONTINUED"))));
+
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM garment_products WHERE id = ?",
+                        Integer.class,
+                        2501))
+                .isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM garment_product_variants WHERE product_id = ?",
+                        Integer.class,
+                        2501))
+                .isEqualTo(2);
+        assertThatThrownBy(() -> productService.requireOrderSelectableVariant(2501, 3501))
+                .isInstanceOf(ProductNotSelectableException.class)
+                .hasMessage("The selected product variant is not available for a new order.");
+
+        mockMvc.perform(get("/api/products"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+        mockMvc.perform(get("/api/products/catalog/2501"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("PRODUCT_NOT_FOUND"));
+        mockMvc.perform(get("/api/products/2501").cookie(salesOfficer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DISCONTINUED"));
+
+        mockMvc.perform(delete("/api/products/2501").cookie(salesOfficer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.product.id").value(2501))
+                .andExpect(jsonPath("$.product.status").value("DISCONTINUED"));
+    }
+
+    @Test
+    void discontinuationValidatesProductIdAndMissingProduct() throws Exception {
+        Cookie salesOfficer = sessionFor(UserRole.SALES_OFFICER);
+
+        mockMvc.perform(delete("/api/products/0").cookie(salesOfficer))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.error.fields.productId").exists());
+        mockMvc.perform(delete("/api/products/not-a-number").cookie(salesOfficer))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
+        mockMvc.perform(delete("/api/products/999999").cookie(salesOfficer))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("PRODUCT_NOT_FOUND"));
     }
 
     private Cookie sessionFor(UserRole role) {

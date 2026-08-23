@@ -30,25 +30,27 @@ class DatabaseMigrationTests {
             try (Liquibase liquibase = new Liquibase(
                     CHANGELOG, new ClassLoaderResourceAccessor(), database)) {
                 liquibase.update(new Contexts(), new LabelExpression());
-                assertThat(executedChangeSetCount(connection)).isEqualTo(3);
+                assertThat(executedChangeSetCount(connection)).isEqualTo(4);
                 assertThat(applicationTables(connection))
                         .containsExactly(
                                 "GARMENT_CATEGORIES",
                                 "GARMENT_PRODUCTS",
                                 "GARMENT_PRODUCT_VARIANTS",
+                                "SUPPLIER_PROFILES",
                                 "USERS");
 
-                liquibase.rollback(3, new Contexts(), new LabelExpression());
+                liquibase.rollback(4, new Contexts(), new LabelExpression());
                 assertThat(executedChangeSetCount(connection)).isZero();
                 assertThat(applicationTables(connection)).isEmpty();
 
                 liquibase.update(new Contexts(), new LabelExpression());
-                assertThat(executedChangeSetCount(connection)).isEqualTo(3);
+                assertThat(executedChangeSetCount(connection)).isEqualTo(4);
                 assertThat(applicationTables(connection))
                         .containsExactly(
                                 "GARMENT_CATEGORIES",
                                 "GARMENT_PRODUCTS",
                                 "GARMENT_PRODUCT_VARIANTS",
+                                "SUPPLIER_PROFILES",
                                 "USERS");
             }
         }

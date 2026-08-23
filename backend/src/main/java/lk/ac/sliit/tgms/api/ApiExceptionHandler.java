@@ -8,6 +8,7 @@ import lk.ac.sliit.tgms.auth.InvalidSessionException;
 import lk.ac.sliit.tgms.auth.PasswordPolicyException;
 import lk.ac.sliit.tgms.product.InactiveProductCategoryException;
 import lk.ac.sliit.tgms.product.ProductNotFoundException;
+import lk.ac.sliit.tgms.product.ProductNotSelectableException;
 import lk.ac.sliit.tgms.product.ProductValidationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -80,6 +81,13 @@ public class ApiExceptionHandler {
     public ResponseEntity<ApiErrorResponse> productNotFound(ProductNotFoundException exception) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ApiErrorResponse.of("PRODUCT_NOT_FOUND", exception.getMessage()));
+    }
+
+    @ExceptionHandler(ProductNotSelectableException.class)
+    public ResponseEntity<ApiErrorResponse> productNotSelectable(
+            ProductNotSelectableException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.of("PRODUCT_NOT_SELECTABLE", exception.getMessage()));
     }
 
     @ExceptionHandler({InvalidCredentialsException.class, InvalidSessionException.class})

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import {
+  discontinueProduct,
   getProduct,
   getProductApiError,
   updateProduct,
@@ -66,6 +67,45 @@ function EditProductNotFoundState() {
   );
 }
 
+function DiscontinuedProductState({
+  product,
+  message,
+}: {
+  product: GarmentProductDetails;
+  message: string | null;
+}) {
+  return (
+    <section className="px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
+      <div className="mx-auto max-w-4xl rounded-3xl border border-amber-800/70 bg-amber-950/30 p-7 sm:p-10">
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-300">
+          Product lifecycle updated
+        </p>
+        <h1 className="mt-3 text-3xl font-bold text-white">Product discontinued</h1>
+        <p aria-live="polite" className="mt-3 leading-7 text-amber-100">
+          {message ?? "This product was previously discontinued."} Product ID {product.id} and
+          its variant records remain stored for historical references.
+        </p>
+        <dl className="mt-7 grid gap-4 rounded-2xl border border-amber-900 bg-slate-950/60 p-5 sm:grid-cols-2">
+          <div>
+            <dt className="text-xs uppercase tracking-wide text-slate-500">Product</dt>
+            <dd className="mt-1 font-semibold text-white">{product.name}</dd>
+          </div>
+          <div>
+            <dt className="text-xs uppercase tracking-wide text-slate-500">Status</dt>
+            <dd className="mt-1 font-semibold text-amber-300">Discontinued</dd>
+          </div>
+        </dl>
+        <Link
+          className="mt-7 inline-flex rounded-full border border-amber-700 px-5 py-2.5 text-sm font-semibold text-amber-100 transition hover:border-amber-400"
+          to={productCatalogPagePath}
+        >
+          Back to garment catalog
+        </Link>
+      </div>
+    </section>
+  );
+}
+
 function EditProductContent({ productId }: { productId: number }) {
   const [product, setProduct] = useState<GarmentProductDetails | null>(null);
   const [selectedVariantId, setSelectedVariantId] = useState<number | null>(null);
@@ -77,13 +117,14 @@ function EditProductContent({ productId }: { productId: number }) {
   const [isNotFound, setIsNotFound] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isConfirmingDiscontinuation, setIsConfirmingDiscontinuation] = useState(false);
+  const [isDiscontinuing, setIsDiscontinuing] = useState(false);
+  const [discontinuationError, setDiscontinuationError] = useState<string | null>(null);
+  const [discontinuationMessage, setDiscontinuationMessage] = useState<string | null>(null);
   const [requestVersion, setRequestVersion] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
-    setIsLoading(true);
-    setLoadError(null);
-    setIsNotFound(false);
 
     void getProduct(productId, controller.signal)
       .then((storedProduct) => {
@@ -125,6 +166,9 @@ function EditProductContent({ productId }: { productId: number }) {
   }, [productId, requestVersion]);
 
   function retryLoad() {
+    setIsLoading(true);
+    setLoadError(null);
+    setIsNotFound(false);
     setRequestVersion((current) => current + 1);
   }
 
@@ -192,6 +236,24 @@ function EditProductContent({ productId }: { productId: number }) {
     }
   }
 
+  async function confirmDiscontinuation() {
+    setDiscontinuationError(null);
+    setIsDiscontinuing(true);
+    try {
+      const result = await discontinueProduct(productId);
+      setProduct(result.product);
+      setDiscontinuationMessage(result.message);
+      setIsConfirmingDiscontinuation(false);
+    } catch (error: unknown) {
+      setDiscontinuationError(getProductApiError(
+        error,
+        "The garment product could not be discontinued. Please try again.",
+      ).message);
+    } finally {
+      setIsDiscontinuing(false);
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="mx-auto max-w-4xl px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
@@ -224,6 +286,15 @@ function EditProductContent({ productId }: { productId: number }) {
           title="Product editor unavailable"
         />
       </div>
+    );
+  }
+
+  if (product.status === "DISCONTINUED") {
+    return (
+      <DiscontinuedProductState
+        message={discontinuationMessage}
+        product={product}
+      />
     );
   }
 
@@ -423,6 +494,68 @@ function EditProductContent({ productId }: { productId: number }) {
             ) : null}
           </div>
         </form>
+
+        <section className="mt-8 rounded-3xl border border-rose-900/70 bg-rose-950/20 p-6 sm:p-8">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-rose-300">
+            Product lifecycle
+          </p>
+          <h2 className="mt-2 text-2xl font-bold text-white">Discontinue this product</h2>
+          <p className="mt-3 max-w-2xl leading-7 text-slate-300">
+            This removes the product and all its variants from new-order selection while
+            retaining their stable IDs for historical records.
+          </p>
+
+          {isConfirmingDiscontinuation ? (
+            <div
+              aria-describedby="discontinue-product-description"
+              aria-labelledby="discontinue-product-title"
+              className="mt-6 rounded-2xl border border-rose-700 bg-slate-950/70 p-5"
+              role="alertdialog"
+            >
+              <h3 className="text-lg font-bold text-white" id="discontinue-product-title">
+                Confirm product discontinuation
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-slate-300" id="discontinue-product-description">
+                Confirm that {product.name} should no longer be offered for new orders. This
+                action does not delete its historical database records.
+              </p>
+              {discontinuationError ? (
+                <p className="mt-4 text-sm text-rose-200" role="alert">
+                  {discontinuationError}
+                </p>
+              ) : null}
+              <div className="mt-5 flex flex-wrap gap-3">
+                <button
+                  className="rounded-xl bg-rose-500 px-5 py-3 font-semibold text-white transition hover:bg-rose-400 disabled:cursor-wait disabled:opacity-60"
+                  disabled={isDiscontinuing}
+                  onClick={() => void confirmDiscontinuation()}
+                  type="button"
+                >
+                  {isDiscontinuing ? "Discontinuing product…" : "Confirm discontinuation"}
+                </button>
+                <button
+                  className="rounded-xl border border-slate-700 px-5 py-3 font-semibold text-slate-200 transition hover:border-slate-500 disabled:opacity-60"
+                  disabled={isDiscontinuing}
+                  onClick={() => {
+                    setIsConfirmingDiscontinuation(false);
+                    setDiscontinuationError(null);
+                  }}
+                  type="button"
+                >
+                  Keep product active
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              className="mt-6 rounded-xl border border-rose-700 px-5 py-3 font-semibold text-rose-200 transition hover:bg-rose-950"
+              onClick={() => setIsConfirmingDiscontinuation(true)}
+              type="button"
+            >
+              Discontinue product
+            </button>
+          )}
+        </section>
       </div>
     </section>
   );

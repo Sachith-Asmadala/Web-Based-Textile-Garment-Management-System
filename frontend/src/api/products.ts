@@ -31,6 +31,11 @@ export interface UpdateProductResponse {
   product: GarmentProductDetails;
 }
 
+export interface DiscontinueProductResponse {
+  message: string;
+  product: GarmentProductDetails;
+}
+
 export interface ProductCatalogFilters {
   search?: string;
   category?: string;
@@ -74,6 +79,13 @@ export async function updateProduct(
   input: UpdateProductInput,
 ): Promise<UpdateProductResponse> {
   const response = await api.put<UpdateProductResponse>(`/products/${productId}`, input);
+  return response.data;
+}
+
+export async function discontinueProduct(
+  productId: number,
+): Promise<DiscontinueProductResponse> {
+  const response = await api.delete<DiscontinueProductResponse>(`/products/${productId}`);
   return response.data;
 }
 
