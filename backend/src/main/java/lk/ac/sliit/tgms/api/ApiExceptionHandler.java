@@ -10,6 +10,12 @@ import lk.ac.sliit.tgms.product.InactiveProductCategoryException;
 import lk.ac.sliit.tgms.product.ProductNotFoundException;
 import lk.ac.sliit.tgms.product.ProductNotSelectableException;
 import lk.ac.sliit.tgms.product.ProductValidationException;
+import lk.ac.sliit.tgms.supplier.MaterialSupplyCodeExistsException;
+import lk.ac.sliit.tgms.supplier.MaterialSupplyArchivedException;
+import lk.ac.sliit.tgms.supplier.MaterialSupplyNotFoundException;
+import lk.ac.sliit.tgms.supplier.MaterialSupplyValidationException;
+import lk.ac.sliit.tgms.supplier.SupplierProfileNotFoundException;
+import lk.ac.sliit.tgms.supplier.SupplierProfileValidationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -88,6 +94,53 @@ public class ApiExceptionHandler {
             ProductNotSelectableException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiErrorResponse.of("PRODUCT_NOT_SELECTABLE", exception.getMessage()));
+    }
+
+    @ExceptionHandler(SupplierProfileValidationException.class)
+    public ResponseEntity<ApiErrorResponse> supplierProfileValidation(
+            SupplierProfileValidationException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.withFields(
+                        "VALIDATION_ERROR", exception.getMessage(), exception.fields()));
+    }
+
+    @ExceptionHandler(SupplierProfileNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> supplierProfileNotFound(
+            SupplierProfileNotFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiErrorResponse.of("SUPPLIER_PROFILE_NOT_FOUND", exception.getMessage()));
+    }
+
+    @ExceptionHandler(MaterialSupplyValidationException.class)
+    public ResponseEntity<ApiErrorResponse> materialSupplyValidation(
+            MaterialSupplyValidationException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.withFields(
+                        "VALIDATION_ERROR", exception.getMessage(), exception.fields()));
+    }
+
+    @ExceptionHandler(MaterialSupplyCodeExistsException.class)
+    public ResponseEntity<ApiErrorResponse> materialSupplyCodeExists(
+            MaterialSupplyCodeExistsException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.withFields(
+                        "MATERIAL_SUPPLY_CODE_EXISTS",
+                        exception.getMessage(),
+                        Map.of("materialCode", exception.getMessage())));
+    }
+
+    @ExceptionHandler(MaterialSupplyNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> materialSupplyNotFound(
+            MaterialSupplyNotFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiErrorResponse.of("MATERIAL_SUPPLY_NOT_FOUND", exception.getMessage()));
+    }
+
+    @ExceptionHandler(MaterialSupplyArchivedException.class)
+    public ResponseEntity<ApiErrorResponse> materialSupplyArchived(
+            MaterialSupplyArchivedException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.of("MATERIAL_SUPPLY_ARCHIVED", exception.getMessage()));
     }
 
     @ExceptionHandler({InvalidCredentialsException.class, InvalidSessionException.class})

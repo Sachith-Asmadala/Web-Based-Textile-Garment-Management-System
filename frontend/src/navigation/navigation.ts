@@ -32,6 +32,10 @@ export const newProductPagePath = "/products/new";
 export const productCatalogPagePath = "/products";
 export const productDetailRoutePath = "/products/:productId";
 export const editProductRoutePath = "/products/:productId/edit";
+export const supplierProfilePagePath = "/supplier/profile";
+export const newMaterialSupplyPagePath = "/supplier/supplies/new";
+export const materialSupplyListPagePath = "/supplies";
+export const editMaterialSupplyRoutePath = "/supplier/supplies/:supplyId/edit";
 
 const positiveIntegerPattern = /^[1-9]\d*$/;
 
@@ -49,6 +53,18 @@ export function getProductDetailPagePath(productId: number) {
 
 export function getEditProductPagePath(productId: number) {
   return `/products/${productId}/edit`;
+}
+
+export function parseMaterialSupplyPageId(value: string | undefined) {
+  if (!value || !positiveIntegerPattern.test(value)) {
+    return null;
+  }
+  const supplyId = Number(value);
+  return Number.isSafeInteger(supplyId) ? supplyId : null;
+}
+
+export function getEditMaterialSupplyPagePath(supplyId: number) {
+  return `/supplier/supplies/${supplyId}/edit`;
 }
 
 const publicHome: NavigationItem = {
@@ -105,6 +121,32 @@ export function getNavigationItems(user: AuthUser | null): NavigationItem[] {
       label: "Add garment product",
       description: "Create a product and its first variant",
       path: newProductPagePath,
+    });
+  }
+
+  if (user.role === "SUPPLIER") {
+    items.push({
+      label: "Supplier profile",
+      description: "Maintain business and contact information",
+      path: supplierProfilePagePath,
+    });
+    items.push({
+      label: "My material supplies",
+      description: "Review and search your recorded materials",
+      path: materialSupplyListPagePath,
+    });
+    items.push({
+      label: "Add material supply",
+      description: "Record a material your business can provide",
+      path: newMaterialSupplyPagePath,
+    });
+  }
+
+  if (user.role === "INVENTORY_MANAGER" || user.role === "ADMINISTRATOR") {
+    items.push({
+      label: "Material supplies",
+      description: "Find supplier material and delivery information",
+      path: materialSupplyListPagePath,
     });
   }
 

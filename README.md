@@ -596,6 +596,17 @@ the Spring Boot/React foundation, migration workflow, authentication, authorizat
 shared UI shell, and quality gate. TGMS-10 through TGMS-16 add the garment catalog
 schema and the scoped create, browse, search, detail, update, and discontinue workflows.
 TGMS-20 adds the Supplier Management identity/contact schema boundary.
+TGMS-21 adds the authenticated supplier-owned create and update workflow over that
+existing boundary without adding supply or inventory behavior.
+TGMS-22 adds the supplier-owned material supply schema boundary without adding supply
+CRUD or Inventory behavior.
+TGMS-23 adds Supplier-only material supply creation over that schema without adding
+list, search, edit, discontinue, or Inventory behavior. TGMS-24 adds scoped read and
+search behavior for Suppliers, Inventory Managers, and Administrators without adding
+edit, discontinue, stock, or receiving behavior. TGMS-25 adds Supplier-owned updates
+for quantity, price, and delivery details while preserving supply identity and status.
+TGMS-26 completes Supplier Management CRUD with soft archival and publishes the stable
+Supplier/Supply read contract for Inventory Management.
 
 ```text
 Web-Based-Textile-Garment-Management-System/
@@ -622,14 +633,17 @@ Web-Based-Textile-Garment-Management-System/
 │       ├── changes/20260822181000_create_users.sql
 │       ├── changes/20260823105000_create_garment_product_catalog.sql
 │       ├── changes/20260823120500_create_supplier_profiles.sql
+│       ├── changes/20260823123000_create_material_supplies.sql
 │       ├── db.changelog-master.xml
 │       └── README.md
 ├── frontend/
 │   ├── src/
 │   │   ├── test/setup.ts
 │   │   ├── api/auth.ts
+│   │   ├── api/materialSupplies.ts
 │   │   ├── api/products.ts
 │   │   ├── api/roleAccess.ts
+│   │   ├── api/supplierProfile.ts
 │   │   ├── auth/
 │   │   ├── components/AppStates.tsx
 │   │   ├── dashboard/DashboardPage.tsx
@@ -642,6 +656,11 @@ Web-Based-Textile-Garment-Management-System/
 │   │   ├── products/ProductDetailPage.tsx
 │   │   ├── products/productForm.ts
 │   │   ├── products/productTypes.ts
+│   │   ├── suppliers/SupplierProfilePage.tsx
+│   │   ├── suppliers/AddMaterialSupplyPage.tsx
+│   │   ├── suppliers/MaterialSupplyListPage.tsx
+│   │   ├── suppliers/EditMaterialSupplyPage.tsx
+│   │   ├── suppliers/materialSupplyForm.ts
 │   │   ├── App.test.tsx
 │   │   ├── App.tsx
 │   │   ├── index.css
@@ -916,10 +935,11 @@ No Order Management table, endpoint, or order-creation behavior is added by TGMS
 those remain owned by the later Order module. This handoff supplies its reusable
 server-side validation boundary without inventing that module prematurely.
 
-## Supplier Profile Schema Contract
+## Supplier Profile Contract
 
-TGMS-20 introduces only the Supplier Management profile boundary; it does not add
-supplier CRUD pages, APIs, supply records, or Inventory Management behavior.
+TGMS-20 introduces the Supplier Management profile boundary. TGMS-21 adds the
+supplier-owned create/edit API and page over that schema. Neither ticket adds supply
+records or Inventory Management behavior.
 
 | Table/field | Contract |
 |---|---|
@@ -933,13 +953,125 @@ supplier CRUD pages, APIs, supply records, or Inventory Management behavior.
 The foreign key uses restrictive update/delete behavior so authenticated accounts and
 referenced supplier history cannot be detached. `users` remains the source of truth
 for account-holder name, login email, password hash, role, and active state; none are
-copied into `supplier_profiles`. A future profile-creation service must validate that
-the linked account role is `SUPPLIER`, because a database check constraint cannot read
-another table.
+copied into `supplier_profiles`. The TGMS-21 service performs the necessary cross-table
+role rule because a database check constraint cannot read another table. It derives
+ownership only from the validated JWT `sub` claim, reloads the active account from
+`users`, and requires its
+stored role to remain `SUPPLIER`. The request never accepts `user_id` or `supplier_id`,
+so a supplier cannot select or overwrite another profile.
+
+| Method and route | Access | Result |
+|---|---|---|
+| `GET /api/supplier-profile` | `SUPPLIER` | Load the profile owned by the authenticated account; `404 SUPPLIER_PROFILE_NOT_FOUND` when none exists |
+| `PUT /api/supplier-profile` | `SUPPLIER` | Create the caller's profile (`201`) or update that same profile in place (`200`) |
+
+The PUT body contains only `businessName`, `contactPhone`, and `address`. All are
+required, whitespace-normalized, and constrained to the schema maxima of 160, 32, and
+500 characters. Validation failures use the shared `400 VALIDATION_ERROR` field-error
+envelope. The stable supplier ID, linked user ID, and `createdAt` remain unchanged on
+update; `updatedAt` advances. The Supplier-only page is
+`http://localhost:5173/supplier/profile`, appears only in Supplier navigation, preloads
+the current record, and provides loading, retryable error, create, edit, validation,
+and success states.
 
 Supply and Inventory modules must store `supplier_profiles.id` as `supplier_id` and
 resolve current supplier identity/contact data through Supplier Management. They must
 not duplicate `business_name`, `contact_phone`, or `address` as competing master data.
+
+## Material Supply Schema Contract
+
+TGMS-22 introduces `material_supplies` as Supplier Management's source of truth for
+materials a supplier can provide. It adds schema and tests only—no form, API, supply
+CRUD, inventory stock, receiving transaction, or demo data.
+
+| Table/field | Contract |
+|---|---|
+| `material_supplies.id` | Stable generated `BIGINT` supply ID for later Inventory references |
+| `supplier_id` | Required foreign key to `supplier_profiles.id`, using restrictive update/delete behavior |
+| `material_code` | Required supplier-scoped identifier; unique with `supplier_id` |
+| `material_name` / `material_description` | Required name and optional descriptive information |
+| `quantity` / `unit_of_measure` | Exact non-negative `DECIMAL(14,3)` amount and required unit label |
+| `unit_price` | Exact non-negative `DECIMAL(12,2)` unit price |
+| `delivery_lead_time_days` / `delivery_notes` | Non-negative delivery lead time and optional delivery information |
+| `status` | Controlled `ACTIVE`, `INACTIVE`, or `DISCONTINUED` lifecycle status |
+| `created_at` / `updated_at` | Required UTC-compatible `TIMESTAMP(6)` audit timestamps |
+
+Zero quantity, price, or delivery lead time is representable, while negative values are
+rejected by database checks. TGMS-23 requires positive quantity and unit price for each
+new active offer while allowing a zero-day lead time. Inventory Management may
+reference `material_supplies.id` as
+`material_supply_id`; it must not establish a competing source of truth for supplier
+ownership, current offer quantity/price, delivery information, or lifecycle status.
+
+| Method and route | Access | Result |
+|---|---|---|
+| `POST /api/material-supplies` | `SUPPLIER` | Create an `ACTIVE` material supply owned by the authenticated supplier; returns `201` with the saved record |
+| `GET /api/material-supplies` | `SUPPLIER`, `INVENTORY_MANAGER`, `ADMINISTRATOR` | Return only supplies permitted for the authenticated role, with optional `search` and `status` filters |
+| `GET /api/material-supplies/{supplyId}` | `SUPPLIER`, `INVENTORY_MANAGER`, `ADMINISTRATOR` | Read one permitted stable supply ID; Supplier ownership remains scoped |
+| `PUT /api/material-supplies/{supplyId}` | `SUPPLIER` | Update owned quantity, unit price, delivery lead time, and delivery notes; return the complete current record |
+| `DELETE /api/material-supplies/{supplyId}` | `SUPPLIER` | Idempotently mark an owned supply `DISCONTINUED`, retain its row and stable ID, and return the archived record |
+
+The POST body contains `materialCode`, `materialName`, optional
+`materialDescription`, positive `quantity`, `unitOfMeasure`, positive `unitPrice`,
+non-negative `deliveryLeadTimeDays`, and optional `deliveryNotes`. It never accepts an
+ownership or status field. The service reloads the active account, requires its stored
+role to remain `SUPPLIER`, resolves `supplier_profiles.id` by JWT `sub`, normalizes text,
+and reads the inserted record back. A missing profile returns
+`404 SUPPLIER_PROFILE_NOT_FOUND`; a duplicate supplier-scoped code returns
+`409 MATERIAL_SUPPLY_CODE_EXISTS`; invalid fields return the shared
+`400 VALIDATION_ERROR` envelope.
+
+The Supplier-only form is `http://localhost:5173/supplier/supplies/new`. It confirms the
+linked supplier identity before showing the form and provides loading, missing-profile,
+retryable error, validation, submission error, and saved-record confirmation states.
+
+The shared read page is `http://localhost:5173/supplies`. A Supplier receives records
+only for the `supplier_profiles.id` resolved from the active authenticated account.
+Inventory Managers and Administrators receive company-wide records enriched with the
+owning supplier's current business name. The case-insensitive `search` parameter checks
+material code, name, description, unit of measure, and delivery notes; `status` accepts
+only `ACTIVE`, `INACTIVE`, or `DISCONTINUED`. Both filters combine with AND semantics.
+The page exposes loading, retryable error, initial-empty, filtered-no-results, clear,
+and role-appropriate navigation states.
+
+The Supplier edit route is
+`http://localhost:5173/supplier/supplies/{supplyId}/edit`. Its PUT body contains only
+positive `quantity`, positive `unitPrice`, non-negative `deliveryLeadTimeDays`, and
+optional `deliveryNotes`. The server resolves ownership from the active account and
+uses both stable supply ID and supplier ID in the update predicate. It does not accept
+changes to supplier ownership, material code/name/description, unit of measure, status,
+or creation time. A successful update explicitly advances `updated_at`; the existing
+company list query reads the committed values without a separate data copy. Missing or
+unowned IDs both return `404 MATERIAL_SUPPLY_NOT_FOUND`.
+
+Archival requires explicit UI confirmation. It never executes SQL `DELETE`; it changes
+the owned row to `DISCONTINUED` and advances `updated_at`. Archived supplies remain
+readable by their Supplier, Inventory Managers, and Administrators but cannot be edited
+and are contractually ineligible for new Inventory selections. Repeating the archive
+call safely returns the retained record. Attempts to update an archived row return
+`409 MATERIAL_SUPPLY_ARCHIVED`.
+
+## Inventory Handoff: Supplier and Supply Contract
+
+Inventory Management must use these stable identities and must not copy Supplier
+Management master data:
+
+| Contract | Inventory usage |
+|---|---|
+| `supplier_profiles.id` | Stable Supplier identity; reference as `supplier_id` when the Inventory record directly identifies a Supplier |
+| `material_supplies.id` | Stable supply-offer identity; reference as `material_supply_id` with restrictive update/delete behavior |
+| `material_supplies.supplier_id` | Authoritative relationship from a supply to its Supplier profile |
+| `material_code` | Supplier-scoped display/business code, not a globally stable foreign key |
+| `quantity`, `unit_price`, delivery fields | Current Supplier offer information; read from Supplier Management rather than duplicating current master values |
+| `status` | Only `ACTIVE` supplies may be chosen for new Inventory decisions; retained `DISCONTINUED` rows support historical references |
+
+Inventory Manager and Administrator reads use `GET /api/material-supplies`, optionally
+with `search` and `status=ACTIVE`, or `GET /api/material-supplies/{supplyId}` for an exact
+stable ID. A future Inventory migration should reference the retained supply ID with
+`ON UPDATE RESTRICT ON DELETE RESTRICT`. Inventory-specific facts such as actually
+received quantity or transaction-time cost belong to Inventory transactions; they are
+not competing copies of the Supplier's current offered quantity or price. TGMS-26 adds
+no Inventory table, stock mutation, receipt workflow, or seed data.
 
 ---
 
@@ -1007,6 +1139,10 @@ npm run dev
 - Customer registration: `http://localhost:5173/register`
 - Common login: `http://localhost:5173/login`
 - Public garment catalog: `http://localhost:5173/products`
+- Supplier profile (Supplier login required): `http://localhost:5173/supplier/profile`
+- Add material supply (Supplier login required): `http://localhost:5173/supplier/supplies/new`
+- View/search material supplies (Supplier, Inventory Manager, or Administrator): `http://localhost:5173/supplies`
+- Edit owned material supply details (Supplier): `http://localhost:5173/supplier/supplies/{supplyId}/edit`
 
 Stop both servers with `Ctrl+C`.
 
@@ -1070,9 +1206,9 @@ test failure.
 |---|---|
 | `npm run lint` | Pass |
 | `npm run typecheck` | Pass |
-| `npm test` | Pass: 55 frontend and 49 Spring backend tests |
+| `npm test` | Pass: 75 frontend and 69 Spring backend tests |
 | `npm run build` | Pass: Vite production assets and executable Spring Boot JAR |
-| `npm run db:verify` | Pass: apply, rollback, and reapply all four changesets including supplier profiles |
+| `npm run db:verify` | Pass: apply, rollback, and reapply all five changesets including material supplies |
 | `npm run verify` | Pass: complete local pull-request quality gate |
 | `npm audit` | Pass: 0 known vulnerabilities |
 
@@ -1093,7 +1229,12 @@ failure, and authorization coverage appropriate to their behavior.
 - [x] Update product information without changing stable IDs
 - [x] Discontinue products while retaining stable IDs and blocking new-order selection
 - [x] Define stable supplier profile schema and authenticated-account relationship
-- [ ] Create supplier and supply information
+- [x] Create and edit the authenticated supplier's own profile
+- [x] Define supplier-owned material supply schema and Inventory reference contract
+- [x] Create supplier-owned material supply information
+- [x] View and search role-permitted material supply information
+- [x] Update owned material supply quantity, price, and delivery details
+- [x] Archive supplies safely and complete the Supplier-to-Inventory handoff
 - [ ] Add supplied material to inventory
 - [ ] Update received/used inventory quantity
 - [ ] Detect low stock

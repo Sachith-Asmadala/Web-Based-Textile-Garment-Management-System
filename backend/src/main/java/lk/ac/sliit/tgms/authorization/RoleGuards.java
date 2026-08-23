@@ -27,6 +27,11 @@ public final class RoleGuards {
 
     @Target({ElementType.METHOD, ElementType.TYPE})
     @Retention(RetentionPolicy.RUNTIME)
+    @PreAuthorize("hasAnyRole('SUPPLIER', 'INVENTORY_MANAGER', 'ADMINISTRATOR')")
+    public @interface SupplyRecordsReadable {}
+
+    @Target({ElementType.METHOD, ElementType.TYPE})
+    @Retention(RetentionPolicy.RUNTIME)
     @PreAuthorize("hasRole('PRODUCTION_MANAGER')")
     public @interface ProductionManagerOnly {}
 

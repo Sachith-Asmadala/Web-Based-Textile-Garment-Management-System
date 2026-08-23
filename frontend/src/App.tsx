@@ -18,16 +18,24 @@ import { DashboardPage } from "./dashboard/DashboardPage";
 import { AppLayout } from "./layout/AppLayout";
 import {
   dashboardPagePaths,
+  editMaterialSupplyRoutePath,
   editProductRoutePath,
+  materialSupplyListPagePath,
   newProductPagePath,
+  newMaterialSupplyPagePath,
   productCatalogPagePath,
   productDetailRoutePath,
+  supplierProfilePagePath,
 } from "./navigation/navigation";
 import { PublicHomePage } from "./pages/PublicHomePage";
 import { AddProductPage } from "./products/AddProductPage";
 import { ProductCatalogPage } from "./products/ProductCatalogPage";
 import { ProductDetailPage } from "./products/ProductDetailPage";
 import { EditProductPage } from "./products/EditProductPage";
+import { SupplierProfilePage } from "./suppliers/SupplierProfilePage";
+import { AddMaterialSupplyPage } from "./suppliers/AddMaterialSupplyPage";
+import { MaterialSupplyListPage } from "./suppliers/MaterialSupplyListPage";
+import { EditMaterialSupplyPage } from "./suppliers/EditMaterialSupplyPage";
 
 const protectedRoleRoutes: Array<{ role: InternalRole; path: string }> = [
   { role: "ADMINISTRATOR", path: roleAccessPagePaths.ADMINISTRATOR },
@@ -95,6 +103,40 @@ export function App() {
               </ProtectedRoute>
             }
             path={editProductRoutePath}
+          />
+          <Route
+            element={
+              <ProtectedRoute allowedRoles={["SUPPLIER"]}>
+                <SupplierProfilePage />
+              </ProtectedRoute>
+            }
+            path={supplierProfilePagePath}
+          />
+          <Route
+            element={
+              <ProtectedRoute allowedRoles={["SUPPLIER"]}>
+                <AddMaterialSupplyPage />
+              </ProtectedRoute>
+            }
+            path={newMaterialSupplyPagePath}
+          />
+          <Route
+            element={
+              <ProtectedRoute
+                allowedRoles={["SUPPLIER", "INVENTORY_MANAGER", "ADMINISTRATOR"]}
+              >
+                <MaterialSupplyListPage />
+              </ProtectedRoute>
+            }
+            path={materialSupplyListPagePath}
+          />
+          <Route
+            element={
+              <ProtectedRoute allowedRoles={["SUPPLIER"]}>
+                <EditMaterialSupplyPage />
+              </ProtectedRoute>
+            }
+            path={editMaterialSupplyRoutePath}
           />
           <Route path="*" element={<NotFoundPage />} />
         </Route>

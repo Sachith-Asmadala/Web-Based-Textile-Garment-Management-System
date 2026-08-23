@@ -14,10 +14,11 @@ Never make an application schema change with undocumented manual SQL.
 
 TGMS-2's `0000_baseline` changeset establishes the reversible, auditable starting
 point. TGMS-3 adds the shared `users` account table required by authentication.
-TGMS-10 adds the garment catalog source of truth, and TGMS-20 adds the supplier profile
-source of truth. Inventory, supply, order, production, and delivery tables do not exist
-yet. Liquibase also creates its own `DATABASECHANGELOG` and `DATABASECHANGELOGLOCK`
-infrastructure tables; these are not application tables.
+TGMS-10 adds the garment catalog source of truth, TGMS-20 adds the supplier profile
+source of truth, and TGMS-22 adds supplier-owned material supply records. Inventory,
+order, production, and delivery tables do not exist yet. Liquibase also creates its own
+`DATABASECHANGELOG` and `DATABASECHANGELOGLOCK` infrastructure tables; these are not
+application tables.
 
 ```text
 database/migrations/
@@ -25,7 +26,8 @@ database/migrations/
 │   ├── 0000_baseline.sql
 │   ├── 20260822181000_create_users.sql
 │   ├── 20260823105000_create_garment_product_catalog.sql
-│   └── 20260823120500_create_supplier_profiles.sql
+│   ├── 20260823120500_create_supplier_profiles.sql
+│   └── 20260823123000_create_material_supplies.sql
 ├── db.changelog-master.xml
 └── README.md
 ```
@@ -163,11 +165,46 @@ authenticated account at most one supplier profile. The relationship uses
 name, login email, password hash, role, and active state remain in `users` and are not
 duplicated in the supplier table.
 
-The database guarantees account existence and one-to-one profile ownership. A future
-Supplier service must additionally verify that a linked account has the controlled
-`SUPPLIER` role before creating a profile; SQL `CHECK` constraints cannot reference a
-different table. Deactivating an account does not delete its supplier identity or
-historical references. No supplier seed data is included.
+The database guarantees account existence and one-to-one profile ownership. The
+TGMS-21 Supplier service additionally verifies that the current linked account remains
+active and has the controlled `SUPPLIER` role before reading or writing a profile;
+SQL `CHECK` constraints cannot reference a different table. It derives the linked user
+only from the authenticated session and never accepts ownership IDs from the client.
+Deactivating an account does not delete its supplier identity or historical references.
+No supplier seed data is included.
+
+TGMS-21 adds no changeset: it uses the TGMS-20 table through the singular
+`GET/PUT /api/supplier-profile` application contract. PUT creates at most one profile
+for the authenticated supplier or updates that row without changing its stable `id`,
+`user_id`, or `created_at`.
+
+## Material Supply Contract
+
+Supplier Management owns `material_supplies`. Its generated `id` is the stable supply
+identifier that later Inventory records may reference as `material_supply_id`.
+Every row has a required `supplier_id` foreign key to `supplier_profiles.id`; restrictive
+update/delete behavior preserves the supplier relationship and future history.
+
+| Field | Contract |
+|---|---|
+| `material_code` | Required supplier-scoped material identifier, maximum 64 characters |
+| `material_name` / `material_description` | Required name and optional description, with 160/500-character limits |
+| `quantity` / `unit_of_measure` | Non-negative `DECIMAL(14,3)` quantity and required unit label |
+| `unit_price` | Non-negative exact `DECIMAL(12,2)` current unit price |
+| `delivery_lead_time_days` / `delivery_notes` | Non-negative lead time and optional delivery information |
+| `status` | Controlled `ACTIVE`, `INACTIVE`, or `DISCONTINUED` lifecycle value |
+| `created_at` / `updated_at` | Required UTC-compatible `TIMESTAMP(6)` audit timestamps |
+
+`(supplier_id, material_code)` is unique, allowing different suppliers to use the same
+material code while preventing duplicate identifiers within one supplier catalog.
+Quantity, price, and delivery lead time allow zero to represent an inactive or currently
+unavailable offer, but reject all negative values. TGMS-23 applies the stronger rule
+that newly created active records require positive quantity and unit price.
+
+Inventory Management must reference the stable supply `id`; it must not duplicate
+Supplier Management's material offer, supplier ownership, current price, delivery lead
+time, or lifecycle status as competing master data. No Inventory table, API, seed data,
+or supply CRUD behavior is added by TGMS-22.
 
 ## Garment Product Catalog Contract
 
@@ -245,3 +282,104 @@ the existing staff retrieval contract remains available for authorized lifecycle
 | Contact/profile integrity | Business name, contact phone, address, and both timestamps are required; blank-value checks are enforced |
 | Credential ownership | Email, password hash, role, active state, and account-holder name remain exclusively in `users` |
 | Repeatable migration | Automated tests apply, roll back, and reapply all four changesets |
+
+## TGMS-21 Verification
+
+| Acceptance check | Result |
+|---|---|
+| Own profile save | Supplier-only service creates or updates by authenticated `users.id` |
+| Ownership | Request contract contains no owner ID; unique `user_id` and server-side lookup prevent cross-account edits |
+| Invalid values | Required and maximum-length rules are enforced by API validation and service normalization |
+| Schema impact | No migration added; automated schema verification remains at four reversible changesets |
+
+## TGMS-22 Verification
+
+| Acceptance check | Result |
+|---|---|
+| Stable supply and supplier IDs | Generated `material_supplies.id` and required restrictive `supplier_id` foreign key |
+| Numeric integrity | Database checks reject negative quantity, unit price, and delivery lead time |
+| Inventory readiness | Stable supply ID and documented `material_supply_id` reference contract |
+| Repeatable migration | Automated tests apply, roll back, and reapply all five changesets |
+
+## TGMS-23 Application Contract
+
+TGMS-23 adds no migration. `POST /api/material-supplies` inserts into the TGMS-22 table
+only after resolving `supplier_profiles.id` from the authenticated Supplier account.
+The request contains no `supplier_id` or status, and every new row is database-defaulted
+to `ACTIVE`. The service returns the saved stable ID and complete record, rejects
+duplicate supplier-scoped material codes, and revalidates required text, decimal
+precision, positive quantity/price, and non-negative delivery lead time.
+
+| Acceptance check | Result |
+|---|---|
+| Valid record save | Transactional Supplier service inserts and reads back the complete active supply |
+| Ownership | JWT user ID resolves the unique Supplier profile; client ownership fields are ignored |
+| Invalid values | Jakarta request validation, service validation, and TGMS-22 database checks provide layered rejection |
+| Schema impact | No changeset added; the five-change migration chain remains reversible |
+
+## TGMS-24 Read Contract
+
+TGMS-24 adds no migration. `GET /api/material-supplies` queries the TGMS-22 table and
+joins `supplier_profiles` only to resolve the current supplier business name. Supplier
+accounts are always constrained by the server-resolved `supplier_profiles.id`.
+Inventory Manager and Administrator accounts may read company-wide supply rows.
+Customer and other internal roles are denied by reusable server-side authorization.
+
+The optional case-insensitive `search` filter covers material code, name, description,
+unit of measure, and delivery notes. The optional `status` filter accepts only
+`ACTIVE`, `INACTIVE`, or `DISCONTINUED`; combined filters use AND semantics.
+
+| Acceptance check | Result |
+|---|---|
+| Supplier visibility | Repository query receives only the authenticated Supplier's stable profile ID |
+| Company read access | Inventory Managers and Administrators receive required supply and supplier display data |
+| Search | Parameterized text search and controlled status filter are applied in the repository query layer |
+| Schema impact | No changeset added; all five existing changesets remain reversible |
+
+## TGMS-25 Update Contract
+
+TGMS-25 adds no migration. Supplier-owned updates use the existing quantity, unit
+price, delivery lead time, delivery notes, and `updated_at` columns. The update SQL
+matches both stable supply ID and the Supplier profile ID resolved from the active
+authenticated user, then explicitly sets `updated_at = CURRENT_TIMESTAMP(6)`.
+
+Material code/name/description, unit of measure, supplier ownership, lifecycle status,
+stable ID, and creation timestamp are not mutable through this contract. Quantity and
+unit price must remain positive for a current offer, while delivery lead time remains a
+non-negative integer. Inventory Manager and Administrator list reads use the same row
+and therefore observe committed updates without duplicated master data.
+
+| Acceptance check | Result |
+|---|---|
+| Own update | Supplier identity is server-resolved and included in the SQL update predicate |
+| Numeric validation | Create and update share positive decimal and non-negative delivery validation |
+| Company visibility | Existing authorized list query reads the updated source row immediately |
+| Audit metadata | Successful update explicitly advances `updated_at` |
+| Schema impact | No changeset added; all five existing changesets remain reversible |
+
+## TGMS-26 Archive and Inventory Handoff Contract
+
+TGMS-26 adds no migration and never physically deletes a supply. Supplier-owned
+`DELETE /api/material-supplies/{supplyId}` updates the retained row to
+`DISCONTINUED` and advances `updated_at`. The operation is idempotent. Archived rows
+remain readable by the owner, Inventory Managers, and Administrators, while further
+detail updates are rejected.
+
+Inventory migrations must reference `material_supplies.id` as `material_supply_id`
+with restrictive update/delete behavior. New Inventory decisions must resolve an
+`ACTIVE` supply through Supplier Management; `DISCONTINUED` rows remain valid for
+historical foreign-key references. `supplier_profiles.id` remains the stable Supplier
+identity and `material_code` remains only a Supplier-scoped business code.
+
+Current offered quantity, unit price, delivery information, status, and Supplier
+ownership remain Supplier Management master data. Inventory may store its own
+transaction facts—such as quantity actually received or transaction-time cost—but must
+not maintain a competing current-offer record.
+
+| Acceptance check | Result |
+|---|---|
+| CRUD completion | Profile create/update and supply create/read/search/update/archive contracts are implemented |
+| Historical safety | Archive retains the row, stable IDs, timestamps, and authorized read access |
+| Permissions | Only the owning Supplier archives; company roles are read-only and unrelated roles are denied |
+| Inventory handoff | Stable IDs, active-selection rule, restrictive FK rule, and read endpoints are documented |
+| Schema impact | No changeset added; all five existing changesets remain reversible |
