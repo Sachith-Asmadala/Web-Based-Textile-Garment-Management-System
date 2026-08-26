@@ -3,7 +3,10 @@ package lk.ac.sliit.tgms.inventory;
 import java.math.BigDecimal;
 import java.text.Normalizer;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import lk.ac.sliit.tgms.supplier.MaterialSupplyRepository;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,9 +14,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class InventoryMaterialService {
 
     private final InventoryMaterialRepository inventoryMaterialRepository;
+    private final MaterialSupplyRepository materialSupplyRepository;
 
-    public InventoryMaterialService(InventoryMaterialRepository inventoryMaterialRepository) {
+    public InventoryMaterialService(
+            InventoryMaterialRepository inventoryMaterialRepository,
+            MaterialSupplyRepository materialSupplyRepository) {
         this.inventoryMaterialRepository = inventoryMaterialRepository;
+        this.materialSupplyRepository = materialSupplyRepository;
     }
 
     @Transactional
@@ -40,18 +47,28 @@ public class InventoryMaterialService {
                 currentQuantity,
                 lowStockThreshold);
 
-        long materialId = inventoryMaterialRepository.create(
-                sourceMaterialSupplyId,
-                normalizedCode,
-                normalizedName,
-                normalizedDescription,
-                materialType,
-                normalizedUnit,
-                currentQuantity,
-                lowStockThreshold);
+        long materialId;
+        try {
+            materialId = inventoryMaterialRepository.create(
+                    sourceMaterialSupplyId,
+                    normalizedCode,
+                    normalizedName,
+                    normalizedDescription,
+                    materialType,
+                    normalizedUnit,
+                    currentQuantity,
+                    lowStockThreshold);
+        } catch (DuplicateKeyException exception) {
+            throw new InventoryMaterialCodeExistsException();
+        }
         return inventoryMaterialRepository.findById(materialId)
                 .orElseThrow(() -> new IllegalStateException(
                         "Created inventory material could not be read back."));
+    }
+
+    @Transactional(readOnly = true)
+    public List<InventoryMaterial> getMaterials() {
+        return inventoryMaterialRepository.findAll();
     }
 
     @Transactional(readOnly = true)
@@ -70,6 +87,12 @@ public class InventoryMaterialService {
             throw new InventoryMaterialValidationException(Map.of(
                     "sourceMaterialSupplyId",
                     "Source material supply ID must be a positive number when provided."));
+        }
+        if (sourceMaterialSupplyId != null
+                && materialSupplyRepository.findById(sourceMaterialSupplyId).isEmpty()) {
+            throw new InventoryMaterialValidationException(Map.of(
+                    "sourceMaterialSupplyId",
+                    "Source material supply was not found."));
         }
     }
 

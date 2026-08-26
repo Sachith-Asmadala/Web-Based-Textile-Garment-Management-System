@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -96,6 +97,20 @@ public class JdbcInventoryMaterialRepository implements InventoryMaterialReposit
                         materialCode)
                 .stream()
                 .findFirst();
+    }
+
+    @Override
+    public List<InventoryMaterial> findAll() {
+        return jdbcTemplate.query(
+                """
+                SELECT id, source_material_supply_id, material_code, material_name,
+                       material_description, material_type, unit_of_measure,
+                       current_quantity, low_stock_threshold, status,
+                       created_at, updated_at
+                FROM inventory_materials
+                ORDER BY created_at DESC, id DESC
+                """,
+                MATERIAL_MAPPER);
     }
 
     private static InventoryMaterial mapMaterial(ResultSet resultSet) throws SQLException {

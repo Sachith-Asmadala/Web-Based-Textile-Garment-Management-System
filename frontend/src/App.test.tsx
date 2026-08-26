@@ -38,6 +38,12 @@ import {
   type UpdateMaterialSupplyResponse,
 } from "./api/materialSupplies";
 import {
+  createInventoryMaterial,
+  getInventoryMaterials,
+  type CreateInventoryMaterialResponse,
+  type InventoryMaterial,
+} from "./api/inventoryMaterials";
+import {
   getSupplierProfile,
   saveSupplierProfile,
   type SaveSupplierProfileResponse,
@@ -47,7 +53,9 @@ import {
   dashboardPagePaths,
   getEditProductPagePath,
   getEditMaterialSupplyPagePath,
+  inventoryMaterialListPagePath,
   newProductPagePath,
+  newInventoryMaterialPagePath,
   productCatalogPagePath,
   getProductDetailPagePath,
   materialSupplyListPagePath,
@@ -114,6 +122,21 @@ vi.mock("./api/materialSupplies", () => ({
     };
   },
 }));
+vi.mock("./api/inventoryMaterials", () => ({
+  createInventoryMaterial: vi.fn(),
+  getInventoryMaterials: vi.fn(),
+  getInventoryMaterialApiError: (error: unknown, fallback: string) => {
+    const details = typeof error === "object" && error !== null
+      ? error as { code?: string; fields?: Record<string, string>; status?: number }
+      : {};
+    return {
+      code: details.code,
+      fields: details.fields ?? {},
+      message: error instanceof Error ? error.message : fallback,
+      status: details.status,
+    };
+  },
+}));
 vi.mock("./api/supplierProfile", () => ({
   getSupplierProfile: vi.fn(),
   saveSupplierProfile: vi.fn(),
@@ -147,6 +170,8 @@ const mockedArchiveMaterialSupply = vi.mocked(archiveMaterialSupply);
 const mockedGetMaterialSupply = vi.mocked(getMaterialSupply);
 const mockedGetMaterialSupplies = vi.mocked(getMaterialSupplies);
 const mockedUpdateMaterialSupply = vi.mocked(updateMaterialSupply);
+const mockedCreateInventoryMaterial = vi.mocked(createInventoryMaterial);
+const mockedGetInventoryMaterials = vi.mocked(getInventoryMaterials);
 const mockedGetSupplierProfile = vi.mocked(getSupplierProfile);
 const mockedSaveSupplierProfile = vi.mocked(saveSupplierProfile);
 
@@ -269,6 +294,26 @@ const listedMaterialSupply: MaterialSupplyListItem = {
   supplierBusinessName: supplierProfile.businessName,
 };
 
+const inventoryMaterial: InventoryMaterial = {
+  id: 301,
+  sourceMaterialSupplyId: null,
+  materialCode: "INV-FAB-001",
+  materialName: "Cotton twill fabric",
+  materialDescription: "Main store 240 GSM cotton twill",
+  materialType: "FABRIC",
+  unitOfMeasure: "metre",
+  currentQuantity: "840.250",
+  lowStockThreshold: "100.000",
+  status: "ACTIVE",
+  createdAt: "2026-08-23T08:00:00Z",
+  updatedAt: "2026-08-23T08:00:00Z",
+};
+
+const createdInventoryMaterialResponse: CreateInventoryMaterialResponse = {
+  message: "Inventory material created successfully.",
+  material: inventoryMaterial,
+};
+
 const roleRoutes: Array<[InternalRole, string]> = [
   ["ADMINISTRATOR", "/access/administrator"],
   ["SUPPLIER", "/access/supplier"],
@@ -310,6 +355,10 @@ describe("App authentication", () => {
     mockedGetMaterialSupply.mockRejectedValue(new Error("Unexpected material supply load."));
     mockedGetMaterialSupplies.mockResolvedValue([]);
     mockedUpdateMaterialSupply.mockRejectedValue(new Error("Unexpected material supply update."));
+    mockedCreateInventoryMaterial.mockRejectedValue(
+      new Error("Unexpected inventory material save."),
+    );
+    mockedGetInventoryMaterials.mockResolvedValue([]);
     mockedAxios.get.mockResolvedValue({ data: { status: "ok" } });
   });
 
@@ -1369,6 +1418,109 @@ describe("App authentication", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Archive service unavailable.");
     expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+  });
+
+  it("lets an Inventory Manager create a material and shows the saved record", async () => {
+    mockedGetCurrentUser.mockResolvedValue({ ...customer, role: "INVENTORY_MANAGER" });
+    mockedCreateInventoryMaterial.mockResolvedValue(createdInventoryMaterialResponse);
+    const user = userEvent.setup();
+    renderApp(newInventoryMaterialPagePath);
+
+    expect(await screen.findByRole("heading", { name: "Add inventory material" }))
+      .toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Material code"), "  INV-FAB-001  ");
+    await user.type(screen.getByLabelText("Material name"), "  Cotton   twill fabric  ");
+    await user.selectOptions(screen.getByLabelText("Material type"), "FABRIC");
+    await user.type(screen.getByLabelText("Unit of measure"), " metre ");
+    await user.type(screen.getByLabelText("Opening quantity"), "840.250");
+    await user.type(screen.getByLabelText("Low-stock threshold"), "100.000");
+    await user.type(
+      screen.getByLabelText("Material description (optional)"),
+      " Main store 240 GSM cotton twill ",
+    );
+    await user.click(screen.getByRole("button", { name: "Save inventory material" }));
+
+    expect(mockedCreateInventoryMaterial).toHaveBeenCalledWith({
+      sourceMaterialSupplyId: "",
+      materialCode: "INV-FAB-001",
+      materialName: "Cotton twill fabric",
+      materialDescription: "Main store 240 GSM cotton twill",
+      materialType: "FABRIC",
+      unitOfMeasure: "metre",
+      currentQuantity: "840.250",
+      lowStockThreshold: "100.000",
+    });
+    expect(await screen.findByText("Inventory material saved")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: inventoryMaterial.materialName }))
+      .toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View inventory list" }))
+      .toHaveAttribute("href", inventoryMaterialListPagePath);
+  });
+
+  it("rejects invalid inventory quantities before calling the API", async () => {
+    mockedGetCurrentUser.mockResolvedValue({ ...customer, role: "INVENTORY_MANAGER" });
+    const user = userEvent.setup();
+    renderApp(newInventoryMaterialPagePath);
+
+    await screen.findByRole("heading", { name: "Add inventory material" });
+    await user.type(screen.getByLabelText("Opening quantity"), "0");
+    await user.type(screen.getByLabelText("Low-stock threshold"), "-1");
+    await user.click(screen.getByRole("button", { name: "Save inventory material" }));
+
+    expect(screen.getByText("Material code is required.")).toBeInTheDocument();
+    expect(screen.getByText("Material name is required.")).toBeInTheDocument();
+    expect(screen.getByText("Unit of measure is required.")).toBeInTheDocument();
+    expect(screen.getByText(/Opening quantity must be positive/i)).toBeInTheDocument();
+    expect(screen.getByText(/Low-stock threshold must be zero or greater/i))
+      .toBeInTheDocument();
+    expect(mockedCreateInventoryMaterial).not.toHaveBeenCalled();
+  });
+
+  it("shows inventory materials in the list for the Inventory Manager", async () => {
+    mockedGetCurrentUser.mockResolvedValue({ ...customer, role: "INVENTORY_MANAGER" });
+    mockedGetInventoryMaterials.mockResolvedValue([inventoryMaterial]);
+    renderApp(inventoryMaterialListPagePath);
+
+    expect(await screen.findByRole("heading", { name: "Inventory materials" }))
+      .toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: inventoryMaterial.materialName }))
+      .toBeInTheDocument();
+    expect(screen.getByText("840.250 metre")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Add inventory material" }))
+      .toHaveAttribute("href", newInventoryMaterialPagePath);
+    expect(mockedGetInventoryMaterials).toHaveBeenCalledWith(expect.any(AbortSignal));
+  });
+
+  it("protects inventory material pages and navigation from other roles", async () => {
+    mockedGetCurrentUser.mockResolvedValue(customer);
+    renderApp(newInventoryMaterialPagePath);
+
+    expect(await screen.findByRole("heading", { name: "Access forbidden" }))
+      .toBeInTheDocument();
+    expect(mockedCreateInventoryMaterial).not.toHaveBeenCalled();
+
+    cleanup();
+    renderApp();
+    const customerNavigation = await screen.findByRole("navigation", {
+      name: "Primary navigation",
+    });
+    expect(within(customerNavigation).queryByRole("link", {
+      name: /add inventory material/i,
+    })).not.toBeInTheDocument();
+
+    cleanup();
+    mockedGetCurrentUser.mockResolvedValue({ ...customer, role: "INVENTORY_MANAGER" });
+    renderApp();
+    const inventoryNavigation = await screen.findByRole("navigation", {
+      name: "Primary navigation",
+    });
+    expect(within(inventoryNavigation).getByRole("link", {
+      name: /inventory materials/i,
+    })).toHaveAttribute("href", inventoryMaterialListPagePath);
+    expect(within(inventoryNavigation).getByRole("link", {
+      name: /add inventory material/i,
+    })).toHaveAttribute("href", newInventoryMaterialPagePath);
   });
 
   it("shows the reusable not-found page for an unknown route", async () => {

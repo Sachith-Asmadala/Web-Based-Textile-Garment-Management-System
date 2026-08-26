@@ -1,6 +1,7 @@
 package lk.ac.sliit.tgms.inventory;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 public interface InventoryMaterialRepository {
@@ -18,4 +19,6 @@ public interface InventoryMaterialRepository {
     Optional<InventoryMaterial> findById(long materialId);
 
     Optional<InventoryMaterial> findByMaterialCode(String materialCode);
+
+    List<InventoryMaterial> findAll();
 }

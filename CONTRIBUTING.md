@@ -13,6 +13,7 @@ npm ci
 npm run verify
 ```
 
+
 `npm run verify` runs the same checks as pull-request CI, in this order:
 
 1. `npm run lint` — ESLint for React, TypeScript, and repository scripts.

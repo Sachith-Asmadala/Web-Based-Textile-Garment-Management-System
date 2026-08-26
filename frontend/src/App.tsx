@@ -19,8 +19,10 @@ import { AppLayout } from "./layout/AppLayout";
 import {
   dashboardPagePaths,
   editMaterialSupplyRoutePath,
+  inventoryMaterialListPagePath,
   editProductRoutePath,
   materialSupplyListPagePath,
+  newInventoryMaterialPagePath,
   newProductPagePath,
   newMaterialSupplyPagePath,
   productCatalogPagePath,
@@ -36,6 +38,8 @@ import { SupplierProfilePage } from "./suppliers/SupplierProfilePage";
 import { AddMaterialSupplyPage } from "./suppliers/AddMaterialSupplyPage";
 import { MaterialSupplyListPage } from "./suppliers/MaterialSupplyListPage";
 import { EditMaterialSupplyPage } from "./suppliers/EditMaterialSupplyPage";
+import { AddInventoryMaterialPage } from "./inventory/AddInventoryMaterialPage";
+import { InventoryMaterialListPage } from "./inventory/InventoryMaterialListPage";
 
 const protectedRoleRoutes: Array<{ role: InternalRole; path: string }> = [
   { role: "ADMINISTRATOR", path: roleAccessPagePaths.ADMINISTRATOR },
@@ -137,6 +141,22 @@ export function App() {
               </ProtectedRoute>
             }
             path={editMaterialSupplyRoutePath}
+          />
+          <Route
+            element={
+              <ProtectedRoute allowedRoles={["INVENTORY_MANAGER"]}>
+                <InventoryMaterialListPage />
+              </ProtectedRoute>
+            }
+            path={inventoryMaterialListPagePath}
+          />
+          <Route
+            element={
+              <ProtectedRoute allowedRoles={["INVENTORY_MANAGER"]}>
+                <AddInventoryMaterialPage />
+              </ProtectedRoute>
+            }
+            path={newInventoryMaterialPagePath}
           />
           <Route path="*" element={<NotFoundPage />} />
         </Route>

@@ -6,6 +6,8 @@ import lk.ac.sliit.tgms.auth.EmailAlreadyRegisteredException;
 import lk.ac.sliit.tgms.auth.InvalidCredentialsException;
 import lk.ac.sliit.tgms.auth.InvalidSessionException;
 import lk.ac.sliit.tgms.auth.PasswordPolicyException;
+import lk.ac.sliit.tgms.inventory.InventoryMaterialCodeExistsException;
+import lk.ac.sliit.tgms.inventory.InventoryMaterialValidationException;
 import lk.ac.sliit.tgms.product.InactiveProductCategoryException;
 import lk.ac.sliit.tgms.product.ProductNotFoundException;
 import lk.ac.sliit.tgms.product.ProductNotSelectableException;
@@ -141,6 +143,24 @@ public class ApiExceptionHandler {
             MaterialSupplyArchivedException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiErrorResponse.of("MATERIAL_SUPPLY_ARCHIVED", exception.getMessage()));
+    }
+
+    @ExceptionHandler(InventoryMaterialValidationException.class)
+    public ResponseEntity<ApiErrorResponse> inventoryMaterialValidation(
+            InventoryMaterialValidationException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.withFields(
+                        "VALIDATION_ERROR", exception.getMessage(), exception.fields()));
+    }
+
+    @ExceptionHandler(InventoryMaterialCodeExistsException.class)
+    public ResponseEntity<ApiErrorResponse> inventoryMaterialCodeExists(
+            InventoryMaterialCodeExistsException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.withFields(
+                        "INVENTORY_MATERIAL_CODE_EXISTS",
+                        exception.getMessage(),
+                        Map.of("materialCode", exception.getMessage())));
     }
 
     @ExceptionHandler({InvalidCredentialsException.class, InvalidSessionException.class})

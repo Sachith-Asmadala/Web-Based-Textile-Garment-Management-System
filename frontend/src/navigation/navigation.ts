@@ -36,6 +36,8 @@ export const supplierProfilePagePath = "/supplier/profile";
 export const newMaterialSupplyPagePath = "/supplier/supplies/new";
 export const materialSupplyListPagePath = "/supplies";
 export const editMaterialSupplyRoutePath = "/supplier/supplies/:supplyId/edit";
+export const inventoryMaterialListPagePath = "/inventory/materials";
+export const newInventoryMaterialPagePath = "/inventory/materials/new";
 
 const positiveIntegerPattern = /^[1-9]\d*$/;
 
@@ -147,6 +149,19 @@ export function getNavigationItems(user: AuthUser | null): NavigationItem[] {
       label: "Material supplies",
       description: "Find supplier material and delivery information",
       path: materialSupplyListPagePath,
+    });
+  }
+
+  if (user.role === "INVENTORY_MANAGER") {
+    items.push({
+      label: "Inventory materials",
+      description: "Review fabric and raw-material stock",
+      path: inventoryMaterialListPagePath,
+    });
+    items.push({
+      label: "Add inventory material",
+      description: "Create a fabric or raw-material stock record",
+      path: newInventoryMaterialPagePath,
     });
   }
 

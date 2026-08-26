@@ -1097,12 +1097,12 @@ cd Web-Based-Textile-Garment-Management-System
 ## 2. Install Dependencies
 
 ```bash
-npm install
+make install
 ```
 
-The root npm workspace installs the frontend dependencies using the committed lockfile.
-The backend dependencies are downloaded automatically by `backend/mvnw` when a backend
-command first runs.
+This installs the Node.js workspace from the committed lockfile and downloads the
+backend Maven dependencies. Run `npm ci` directly if `make` is unavailable; backend
+dependencies will then download automatically when a Maven command first runs.
 
 ## 3. Configure Local Environment
 
@@ -1131,7 +1131,7 @@ changesets during startup.
 ## 5. Start the Development Servers
 
 ```bash
-npm run dev
+make run
 ```
 
 - Frontend: `http://localhost:5173`
@@ -1150,6 +1150,18 @@ Stop both servers with `Ctrl+C`.
 
 | Command | Purpose |
 |---|---|
+| `make help` | List all available Make targets |
+| `make install` | Install frontend and backend dependencies |
+| `make install-frontend` | Install only Node.js/frontend dependencies |
+| `make install-backend` | Download only Maven/backend dependencies |
+| `make run` | Start the Spring Boot API and Vite frontend together |
+| `make run-frontend` | Start only the Vite frontend |
+| `make run-backend` | Start only the Spring Boot API |
+| `make build` | Build the frontend and backend |
+| `make test` | Run frontend and backend tests |
+| `make clean` | Remove generated build and test output |
+| `make uninstall` | Remove `node_modules` and all generated output |
+| `make remove` | Alias for `make uninstall` |
 | `npm run dev` | Start the Spring Boot API and Vite frontend together |
 | `npm run dev:backend` | Start only the Spring Boot API |
 | `npm run lint` | Lint the React workspace |
