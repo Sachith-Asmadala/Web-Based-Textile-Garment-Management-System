@@ -15,4 +15,9 @@ public record InventoryMaterial(
         BigDecimal lowStockThreshold,
         InventoryMaterialStatus status,
         Instant createdAt,
-        Instant updatedAt) {}
+        Instant updatedAt) {
+
+    public InventoryStockState stockState() {
+        return InventoryStockState.from(currentQuantity, lowStockThreshold);
+    }
+}

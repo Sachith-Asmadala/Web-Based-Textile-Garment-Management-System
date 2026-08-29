@@ -1,6 +1,5 @@
 package lk.ac.sliit.tgms.auth;
 
-import java.nio.charset.StandardCharsets;
 import java.text.Normalizer;
 import java.util.Locale;
 import org.springframework.dao.DuplicateKeyException;
@@ -11,23 +10,38 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AuthService {
 
-    private static final int MINIMUM_PASSWORD_BYTES = 8;
-    private static final int MAXIMUM_PASSWORD_BYTES = 72;
-
     private final UserAccountRepository userAccountRepository;
     private final PasswordEncoder passwordEncoder;
+    private final PasswordPolicy passwordPolicy;
     private final String dummyPasswordHash;
 
     public AuthService(
-            UserAccountRepository userAccountRepository, PasswordEncoder passwordEncoder) {
+            UserAccountRepository userAccountRepository,
+            PasswordEncoder passwordEncoder,
+            PasswordPolicy passwordPolicy) {
         this.userAccountRepository = userAccountRepository;
         this.passwordEncoder = passwordEncoder;
+        this.passwordPolicy = passwordPolicy;
         this.dummyPasswordHash = passwordEncoder.encode("tgms-invalid-password-placeholder");
     }
 
     @Transactional
     public UserAccount registerCustomer(String fullName, String email, String password) {
-        validatePassword(password);
+        return createAccount(fullName, email, password, UserRole.CUSTOMER);
+    }
+
+    @Transactional
+    public UserAccount createInternalAccount(
+            String fullName, String email, String password, UserRole role) {
+        if (role == null || role == UserRole.CUSTOMER) {
+            throw new IllegalArgumentException("Internal account provisioning requires a staff role.");
+        }
+        return createAccount(fullName, email, password, role);
+    }
+
+    private UserAccount createAccount(
+            String fullName, String email, String password, UserRole role) {
+        passwordPolicy.validate(password);
 
         String normalizedEmail = normalizeEmail(email);
         if (userAccountRepository.findByEmail(normalizedEmail).isPresent()) {
@@ -38,8 +52,7 @@ public class AuthService {
         String passwordHash = passwordEncoder.encode(password);
 
         try {
-            return userAccountRepository.create(
-                    normalizedName, normalizedEmail, passwordHash, UserRole.CUSTOMER);
+            return userAccountRepository.create(normalizedName, normalizedEmail, passwordHash, role);
         } catch (DuplicateKeyException exception) {
             throw new EmailAlreadyRegisteredException();
         }
@@ -49,7 +62,8 @@ public class AuthService {
         String normalizedEmail = normalizeEmail(email);
         var account = userAccountRepository.findByEmail(normalizedEmail);
         String storedHash = account.map(UserAccount::passwordHash).orElse(dummyPasswordHash);
-        String passwordCandidate = isBcryptCompatible(password) ? password : "invalid-password";
+        String passwordCandidate =
+                passwordPolicy.isBcryptCompatible(password) ? password : "invalid-password";
         boolean passwordMatches = passwordEncoder.matches(passwordCandidate, storedHash);
 
         if (account.isEmpty() || !account.get().active() || !passwordMatches) {
@@ -72,17 +86,5 @@ public class AuthService {
     private String normalizeName(String fullName) {
         return Normalizer.normalize(fullName.trim(), Normalizer.Form.NFKC)
                 .replaceAll("\\s+", " ");
-    }
-
-    private void validatePassword(String password) {
-        if (!isBcryptCompatible(password)
-                || password.getBytes(StandardCharsets.UTF_8).length < MINIMUM_PASSWORD_BYTES) {
-            throw new PasswordPolicyException();
-        }
-    }
-
-    private boolean isBcryptCompatible(String password) {
-        return password != null
-                && password.getBytes(StandardCharsets.UTF_8).length <= MAXIMUM_PASSWORD_BYTES;
     }
 }

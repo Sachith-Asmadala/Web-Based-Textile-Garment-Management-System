@@ -6,8 +6,14 @@ import {
   getProductApiError,
   type ProductCatalogFilters,
 } from "../api/products";
+import { useAuth } from "../auth/useAuth";
 import { EmptyState, ErrorState, LoadingState } from "../components/AppStates";
-import { getProductDetailPagePath } from "../navigation/navigation";
+import { StatusBadge } from "../components/ui/StatusBadge";
+import {
+  getCustomerPlaceOrderWithItemPath,
+  getProductDetailPagePath,
+} from "../navigation/navigation";
+import { ProductImage } from "./ProductImage";
 import type { GarmentProductDetails, VariantStatus } from "./productTypes";
 
 interface CatalogFilterForm {
@@ -27,7 +33,7 @@ const emptyFilterForm: CatalogFilterForm = {
 };
 
 const filterInputClassName =
-  "mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20";
+  "mt-2 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20";
 
 function buildCatalogFilters(form: CatalogFilterForm): ProductCatalogFilters {
   const filters: ProductCatalogFilters = {};
@@ -48,42 +54,56 @@ function hasCatalogFilters(filters: ProductCatalogFilters) {
   return Object.keys(filters).length > 0;
 }
 
-function ProductCard({ product }: { product: GarmentProductDetails }) {
+function ProductCard({
+  canAddToCart,
+  product,
+}: {
+  canAddToCart: boolean;
+  product: GarmentProductDetails;
+}) {
   return (
-    <li className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/75 shadow-xl shadow-black/10">
-      <div className="border-b border-slate-800 bg-gradient-to-br from-teal-400/10 to-slate-900 px-6 py-7">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-300">
-          {product.category.name}
-        </p>
-        <h2 className="mt-2 text-2xl font-bold tracking-tight text-white">
-          {product.name}
-        </h2>
-        {product.description ? (
-          <p className="mt-3 leading-6 text-slate-300">{product.description}</p>
-        ) : null}
-      </div>
+    <li className="motion-interactive-card group overflow-hidden rounded-3xl border border-border bg-surface app-shadow transition hover:-translate-y-1 hover:border-primary/40">
+      <ProductImage
+        alt={`${product.name} product photograph`}
+        className="aspect-[4/3] w-full border-b border-border transition-transform duration-500 ease-[var(--ease-emphasized)] group-hover:scale-[1.015]"
+        productName={product.name}
+        src={product.imageUrl}
+      />
 
       <div className="px-6 py-6">
-        <p className="text-sm font-semibold text-slate-200">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">{product.category.name}</p>
+        <h2 className="mt-2 text-2xl font-bold tracking-tight text-foreground">{product.name}</h2>
+        {product.description ? <p className="mt-3 line-clamp-2 leading-6 text-foreground-muted">{product.description}</p> : null}
+        <p className="mt-5 text-sm font-semibold text-foreground">
           Available size and color options
         </p>
         <ul aria-label={`${product.name} available variants`} className="mt-4 grid gap-3">
           {product.variants.map((variant) => (
             <li
-              className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-background/70 px-4 py-3"
               key={variant.id}
             >
-              <span className="font-medium text-slate-200">
+              <span className="font-medium text-foreground">
                 {variant.size} · {variant.color}
               </span>
-              <span className="text-sm font-semibold text-teal-300">
+              <span className="text-sm font-semibold text-primary">
                 Price {variant.price}
               </span>
+              <StatusBadge status={variant.status} />
+              {canAddToCart && variant.status === "AVAILABLE" ? (
+                <Link
+                  aria-label={`Add ${product.name}, ${variant.size}, ${variant.color} to cart`}
+                  className="basis-full rounded-xl bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover"
+                  to={getCustomerPlaceOrderWithItemPath(product.id, variant.id)}
+                >
+                  Add to cart
+                </Link>
+              ) : null}
             </li>
           ))}
         </ul>
         <Link
-          className="mt-5 inline-flex rounded-full border border-teal-400/50 px-4 py-2 text-sm font-semibold text-teal-200 transition hover:border-teal-300 hover:text-white"
+          className="mt-5 inline-flex rounded-full border border-primary/50 px-4 py-2 text-sm font-semibold text-primary transition hover:border-primary hover:text-foreground"
           to={getProductDetailPagePath(product.id)}
         >
           View product details
@@ -94,6 +114,7 @@ function ProductCard({ product }: { product: GarmentProductDetails }) {
 }
 
 export function ProductCatalogPage() {
+  const { user } = useAuth();
   const [filterForm, setFilterForm] = useState<CatalogFilterForm>(emptyFilterForm);
   const [appliedFilters, setAppliedFilters] = useState<ProductCatalogFilters>({});
   const [products, setProducts] = useState<GarmentProductDetails[]>([]);
@@ -159,23 +180,23 @@ export function ProductCatalogPage() {
   return (
     <section className="px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
       <div className="mx-auto max-w-6xl">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-teal-300">
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">
           Garment Product Management
         </p>
-        <h1 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+        <h1 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
           Garment catalog
         </h1>
-        <p className="mt-3 max-w-3xl leading-7 text-slate-400">
+        <p className="mt-3 max-w-3xl leading-7 text-muted">
           Browse active garments with variants that are currently available. Prices are
           shown exactly as recorded by the organization.
         </p>
 
         <form
-          className="mt-8 rounded-3xl border border-slate-800 bg-slate-900/75 p-5 sm:p-6"
+          className="mt-8 rounded-3xl border border-border bg-surface/75 p-5 sm:p-6"
           onSubmit={applyFilters}
         >
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <label className="text-sm font-medium text-slate-200" htmlFor="catalog-search">
+            <label className="text-sm font-medium text-foreground" htmlFor="catalog-search">
               Product name
               <input
                 className={filterInputClassName}
@@ -187,7 +208,7 @@ export function ProductCatalogPage() {
                 value={filterForm.search}
               />
             </label>
-            <label className="text-sm font-medium text-slate-200" htmlFor="catalog-category">
+            <label className="text-sm font-medium text-foreground" htmlFor="catalog-category">
               Category
               <input
                 className={filterInputClassName}
@@ -198,7 +219,7 @@ export function ProductCatalogPage() {
                 value={filterForm.category}
               />
             </label>
-            <label className="text-sm font-medium text-slate-200" htmlFor="catalog-size">
+            <label className="text-sm font-medium text-foreground" htmlFor="catalog-size">
               Size
               <input
                 className={filterInputClassName}
@@ -209,7 +230,7 @@ export function ProductCatalogPage() {
                 value={filterForm.size}
               />
             </label>
-            <label className="text-sm font-medium text-slate-200" htmlFor="catalog-color">
+            <label className="text-sm font-medium text-foreground" htmlFor="catalog-color">
               Color
               <input
                 className={filterInputClassName}
@@ -220,7 +241,7 @@ export function ProductCatalogPage() {
                 value={filterForm.color}
               />
             </label>
-            <label className="text-sm font-medium text-slate-200" htmlFor="catalog-availability">
+            <label className="text-sm font-medium text-foreground" htmlFor="catalog-availability">
               Availability
               <select
                 className={filterInputClassName}
@@ -238,19 +259,19 @@ export function ProductCatalogPage() {
               </select>
             </label>
           </div>
-          <p className="mt-4 text-xs leading-5 text-slate-500">
+          <p className="mt-4 text-xs leading-5 text-muted">
             Category, size, and color use exact case-insensitive matches. Public catalog
             permissions still hide unavailable and discontinued variants.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
             <button
-              className="rounded-full bg-teal-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-teal-200"
+              className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover"
               type="submit"
             >
               Search catalog
             </button>
             <button
-              className="rounded-full border border-slate-700 px-5 py-2.5 text-sm font-semibold text-slate-200 transition hover:border-slate-500 hover:text-white"
+              className="rounded-full border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition hover:border-border hover:text-foreground"
               onClick={clearFilters}
               type="button"
             >
@@ -269,7 +290,7 @@ export function ProductCatalogPage() {
             <ErrorState
               action={(
                 <button
-                  className="rounded-full bg-teal-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-teal-200"
+                  className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover"
                   onClick={retryCatalog}
                   type="button"
                 >
@@ -283,7 +304,7 @@ export function ProductCatalogPage() {
             <EmptyState
               action={filtersAreActive ? (
                 <button
-                  className="rounded-full bg-teal-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-teal-200"
+                  className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover"
                   onClick={clearFilters}
                   type="button"
                 >
@@ -297,12 +318,16 @@ export function ProductCatalogPage() {
             />
           ) : (
             <>
-              <p aria-live="polite" className="text-sm text-slate-400">
+              <p aria-live="polite" className="text-sm text-muted">
                 {products.length} {products.length === 1 ? "product" : "products"} found
               </p>
-              <ul className="mt-5 grid gap-6 md:grid-cols-2">
+              <ul className="motion-stagger mt-5 grid gap-6 md:grid-cols-2">
                 {products.map((product) => (
-                  <ProductCard key={product.id} product={product} />
+                  <ProductCard
+                    canAddToCart={user?.role === "CUSTOMER"}
+                    key={product.id}
+                    product={product}
+                  />
                 ))}
               </ul>
             </>

@@ -22,6 +22,11 @@ interface AuthResponse {
   user: AuthUser;
 }
 
+interface SessionResponse {
+  authenticated: boolean;
+  user: AuthUser | null;
+}
+
 interface ApiErrorBody {
   error?: {
     message?: string;
@@ -49,10 +54,23 @@ export async function logoutUser(): Promise<void> {
   await api.post("/auth/logout");
 }
 
+export async function requestPasswordReset(input: { email: string }): Promise<{ message: string }> {
+  const response = await api.post<{ message: string }>("/auth/password-reset/request", input);
+  return response.data;
+}
+
+export async function resetPassword(input: {
+  token: string;
+  password: string;
+}): Promise<{ message: string }> {
+  const response = await api.post<{ message: string }>("/auth/password-reset/confirm", input);
+  return response.data;
+}
+
 export async function getCurrentUser(): Promise<AuthUser | null> {
   try {
-    const response = await api.get<AuthUser>("/auth/me");
-    return response.data;
+    const response = await api.get<SessionResponse>("/auth/session");
+    return response.data.authenticated ? response.data.user : null;
   } catch (error: unknown) {
     if (axios.isAxiosError(error) && error.response?.status === 401) {
       return null;

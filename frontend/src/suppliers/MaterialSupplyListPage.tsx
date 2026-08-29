@@ -10,6 +10,7 @@ import {
 } from "../api/materialSupplies";
 import { useAuth } from "../auth/useAuth";
 import { EmptyState, ErrorState, LoadingState } from "../components/AppStates";
+import { StatusBadge } from "../components/ui/StatusBadge";
 import {
   getEditMaterialSupplyPagePath,
   newMaterialSupplyPagePath,
@@ -22,7 +23,7 @@ interface SupplyFilterForm {
 
 const emptyFilterForm: SupplyFilterForm = { search: "", status: "" };
 const inputClassName =
-  "mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20";
+  "mt-2 w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20";
 
 function buildFilters(form: SupplyFilterForm): MaterialSupplyListFilters {
   const filters: MaterialSupplyListFilters = {};
@@ -40,61 +41,51 @@ function optionalText(value: string | null) {
   return value ?? "Not provided";
 }
 
-function statusClassName(status: MaterialSupplyStatus) {
-  return status === "ACTIVE"
-    ? "bg-emerald-950 text-emerald-300"
-    : status === "INACTIVE"
-      ? "bg-amber-950 text-amber-300"
-      : "bg-rose-950 text-rose-300";
-}
-
 function SupplyCard({ supply, showSupplier }: {
   supply: MaterialSupplyListItem;
   showSupplier: boolean;
 }) {
   return (
-    <li className="rounded-3xl border border-slate-800 bg-slate-900/75 p-6 shadow-xl shadow-black/10">
+    <li className="motion-record rounded-3xl border border-border bg-surface/75 p-6 shadow-xl shadow-black/10">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-300">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
             {supply.materialCode}
           </p>
-          <h2 className="mt-2 text-2xl font-bold text-white">{supply.materialName}</h2>
+          <h2 className="mt-2 text-2xl font-bold text-foreground">{supply.materialName}</h2>
           {showSupplier ? (
-            <p className="mt-2 text-sm text-slate-400">
+            <p className="mt-2 text-sm text-muted">
               {supply.supplierBusinessName} · Supplier ID {supply.supplierId}
             </p>
           ) : null}
         </div>
-        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusClassName(supply.status)}`}>
-          {supply.status}
-        </span>
+        <StatusBadge status={supply.status} />
       </div>
-      <p className="mt-4 leading-6 text-slate-300">{optionalText(supply.materialDescription)}</p>
-      <dl className="mt-5 grid gap-4 border-t border-slate-800 pt-5 sm:grid-cols-3">
+      <p className="mt-4 leading-6 text-foreground-muted">{optionalText(supply.materialDescription)}</p>
+      <dl className="mt-5 grid gap-4 border-t border-border pt-5 sm:grid-cols-3">
         <div>
-          <dt className="text-xs uppercase tracking-wide text-slate-500">Quantity</dt>
-          <dd className="mt-1 font-semibold text-slate-100">
+          <dt className="text-xs uppercase tracking-wide text-muted">Quantity</dt>
+          <dd className="mt-1 font-semibold text-foreground">
             {supply.quantity} {supply.unitOfMeasure}
           </dd>
         </div>
         <div>
-          <dt className="text-xs uppercase tracking-wide text-slate-500">Unit price</dt>
-          <dd className="mt-1 font-semibold text-slate-100">{supply.unitPrice}</dd>
+          <dt className="text-xs uppercase tracking-wide text-muted">Unit price</dt>
+          <dd className="mt-1 font-semibold text-foreground">{supply.unitPrice}</dd>
         </div>
         <div>
-          <dt className="text-xs uppercase tracking-wide text-slate-500">Lead time</dt>
-          <dd className="mt-1 font-semibold text-slate-100">
+          <dt className="text-xs uppercase tracking-wide text-muted">Lead time</dt>
+          <dd className="mt-1 font-semibold text-foreground">
             {supply.deliveryLeadTimeDays} days
           </dd>
         </div>
       </dl>
-      <p className="mt-4 text-sm text-slate-400">
+      <p className="mt-4 text-sm text-muted">
         Delivery: {optionalText(supply.deliveryNotes)}
       </p>
       {!showSupplier ? (
         <Link
-          className="mt-5 inline-flex rounded-full border border-teal-400/50 px-4 py-2 text-sm font-semibold text-teal-200 transition hover:border-teal-300 hover:text-white"
+          className="mt-5 inline-flex rounded-full border border-primary/50 px-4 py-2 text-sm font-semibold text-primary transition hover:border-primary hover:text-foreground"
           to={getEditMaterialSupplyPagePath(supply.id)}
         >
           {supply.status === "DISCONTINUED" ? "View archived supply" : "Edit supply details"}
@@ -159,15 +150,15 @@ export function MaterialSupplyListPage() {
   return (
     <section className="px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
       <div className="mx-auto max-w-6xl">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-teal-300">
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">
           Supplier Management
         </p>
         <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
               {supplierView ? "My material supplies" : "Material supplies"}
             </h1>
-            <p className="mt-3 max-w-3xl leading-7 text-slate-400">
+            <p className="mt-3 max-w-3xl leading-7 text-muted">
               {supplierView
                 ? "Verify the materials recorded under your authenticated supplier profile."
                 : "Find supplier material, quantity, price, and delivery information."}
@@ -175,7 +166,8 @@ export function MaterialSupplyListPage() {
           </div>
           {supplierView ? (
             <Link
-              className="rounded-full bg-teal-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-teal-200"
+              aria-label="Create a material supply"
+              className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover"
               to={newMaterialSupplyPagePath}
             >
               Add material supply
@@ -184,11 +176,11 @@ export function MaterialSupplyListPage() {
         </div>
 
         <form
-          className="mt-8 rounded-3xl border border-slate-800 bg-slate-900/75 p-5 sm:p-6"
+          className="mt-8 rounded-3xl border border-border bg-surface/75 p-5 sm:p-6"
           onSubmit={applyFilters}
         >
           <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_16rem]">
-            <label className="text-sm font-medium text-slate-200" htmlFor="supply-search">
+            <label className="text-sm font-medium text-foreground" htmlFor="supply-search">
               Search supply records
               <input
                 className={inputClassName}
@@ -203,7 +195,7 @@ export function MaterialSupplyListPage() {
                 value={filterForm.search}
               />
             </label>
-            <label className="text-sm font-medium text-slate-200" htmlFor="supply-status">
+            <label className="text-sm font-medium text-foreground" htmlFor="supply-status">
               Status
               <select
                 className={inputClassName}
@@ -223,13 +215,13 @@ export function MaterialSupplyListPage() {
           </div>
           <div className="mt-5 flex flex-wrap gap-3">
             <button
-              className="rounded-full bg-teal-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-teal-200"
+              className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover"
               type="submit"
             >
               Search supplies
             </button>
             <button
-              className="rounded-full border border-slate-700 px-5 py-2.5 text-sm font-semibold text-slate-200 transition hover:border-slate-500 hover:text-white"
+              className="rounded-full border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition hover:border-border hover:text-foreground"
               onClick={clearFilters}
               type="button"
             >
@@ -248,7 +240,7 @@ export function MaterialSupplyListPage() {
             <ErrorState
               action={(
                 <button
-                  className="rounded-full bg-teal-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-teal-200"
+                  className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover"
                   onClick={retry}
                   type="button"
                 >
@@ -262,7 +254,7 @@ export function MaterialSupplyListPage() {
             <EmptyState
               action={filtersAreActive ? (
                 <button
-                  className="rounded-full bg-teal-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-teal-200"
+                  className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover"
                   onClick={clearFilters}
                   type="button"
                 >
@@ -270,7 +262,7 @@ export function MaterialSupplyListPage() {
                 </button>
               ) : supplierView ? (
                 <Link
-                  className="rounded-full bg-teal-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-teal-200"
+                  className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover"
                   to={newMaterialSupplyPagePath}
                 >
                   Add first supply
@@ -285,7 +277,7 @@ export function MaterialSupplyListPage() {
             />
           ) : (
             <>
-              <p aria-live="polite" className="text-sm text-slate-400">
+              <p aria-live="polite" className="text-sm text-muted">
                 {supplies.length} {supplies.length === 1 ? "supply" : "supplies"} found
               </p>
               <ul className="mt-5 grid gap-5 lg:grid-cols-2">

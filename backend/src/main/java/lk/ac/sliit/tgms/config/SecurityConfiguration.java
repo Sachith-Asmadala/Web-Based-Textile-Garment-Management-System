@@ -9,9 +9,11 @@ import java.util.List;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import lk.ac.sliit.tgms.auth.AuthCookieService;
+import lk.ac.sliit.tgms.auth.UserAccountRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -21,6 +23,8 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
@@ -31,13 +35,27 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.web.cors.CorsUtils;
 
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfiguration {
 
     private static final List<String> AUTHENTICATION_FREE_PATHS = List.of(
-            "/api/auth/register", "/api/auth/login", "/api/auth/logout", "/api/health");
+            "/api/auth/register",
+            "/api/auth/login",
+            "/api/auth/logout",
+            "/api/auth/password-reset/request",
+            "/api/auth/password-reset/confirm",
+            "/api/health");
+
+    private static boolean isPublicProductRead(jakarta.servlet.http.HttpServletRequest request) {
+        if (!"GET".equalsIgnoreCase(request.getMethod())) {
+            return false;
+        }
+        String path = request.getRequestURI();
+        return "/api/products".equals(path) || path.startsWith("/api/products/catalog/");
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -74,7 +92,9 @@ public class SecurityConfiguration {
     @Bean
     public BearerTokenResolver bearerTokenResolver() {
         return request -> {
-            if (AUTHENTICATION_FREE_PATHS.contains(request.getRequestURI())) {
+            if (CorsUtils.isPreFlightRequest(request)
+                    || AUTHENTICATION_FREE_PATHS.contains(request.getRequestURI())
+                    || isPublicProductRead(request)) {
                 return null;
             }
             if (request.getCookies() == null) {
@@ -91,16 +111,46 @@ public class SecurityConfiguration {
 
     @Bean
     public SecurityFilterChain securityFilterChain(
-            HttpSecurity http, BearerTokenResolver bearerTokenResolver) throws Exception {
+            HttpSecurity http,
+            BearerTokenResolver bearerTokenResolver,
+            UserAccountRepository userAccountRepository,
+            @Value("${tgms.auth.allow-non-persisted-session-identities:false}")
+                    boolean allowNonPersistedSessionIdentities) throws Exception {
         JwtAuthenticationConverter authenticationConverter = new JwtAuthenticationConverter();
         authenticationConverter.setJwtGrantedAuthoritiesConverter(jwt -> {
+            String subject = jwt.getSubject();
+            long userId;
+            try {
+                if (subject == null) {
+                    throw invalidSession();
+                }
+                userId = Long.parseLong(subject);
+            } catch (NumberFormatException exception) {
+                throw invalidSession();
+            }
+
+            var storedState = userAccountRepository.findSecurityStateById(userId);
+            if (storedState.isPresent()) {
+                if (!storedState.get().active()) {
+                    throw invalidSession();
+                }
+                return List.of(new SimpleGrantedAuthority(
+                        "ROLE_" + storedState.get().role().name()));
+            }
+
+            if (!allowNonPersistedSessionIdentities) {
+                throw invalidSession();
+            }
+
+            // Some legacy integration tests intentionally issue signed tokens for synthetic test
+            // identities. This fallback is disabled by default and enabled only in test config.
             String role = jwt.getClaimAsString("role");
             return role == null ? List.of() : List.of(new SimpleGrantedAuthority("ROLE_" + role));
         });
 
         http.cors(withDefaults())
-                // The session cookie is SameSite=Strict and the API is stateless. No browser
-                // credential is accepted from a cross-site request.
+                // The current CSRF boundary is the host-scoped HttpOnly SameSite=Strict session
+                // cookie plus the exact credentialed CORS origin and JSON API mutation contract.
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -108,7 +158,28 @@ public class SecurityConfiguration {
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/api/auth/me")
+                        // Browser CORS preflight must be evaluated before authentication.
+                        .requestMatchers(CorsUtils::isPreFlightRequest)
+                        .permitAll()
+                        // Explicit public API surface. Everything else under /api is authenticated
+                        // by default so a future controller cannot become public merely because a
+                        // role annotation was forgotten.
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/health",
+                                "/api/auth/session",
+                                "/api/products",
+                                "/api/products/catalog/**")
+                        .permitAll()
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/auth/register",
+                                "/api/auth/login",
+                                "/api/auth/logout",
+                                "/api/auth/password-reset/request",
+                                "/api/auth/password-reset/confirm")
+                        .permitAll()
+                        .requestMatchers("/api/**")
                         .authenticated()
                         .anyRequest()
                         .permitAll())
@@ -136,6 +207,12 @@ public class SecurityConfiguration {
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter)));
 
         return http.build();
+    }
+
+    private OAuth2AuthenticationException invalidSession() {
+        return new OAuth2AuthenticationException(
+                new OAuth2Error("invalid_token"),
+                "The authenticated session is invalid or expired.");
     }
 
     private void writeSecurityError(

@@ -32,6 +32,7 @@ public class JdbcProductRepository implements ProductRepository {
                    p.category_id,
                    p.name AS product_name,
                    p.description AS product_description,
+                   p.image_url AS product_image_url,
                    p.status AS product_status,
                    p.created_at AS product_created_at,
                    p.updated_at AS product_updated_at,
@@ -100,16 +101,17 @@ public class JdbcProductRepository implements ProductRepository {
     }
 
     @Override
-    public long createProduct(long categoryId, String productName) {
+    public long createProduct(long categoryId, String productName, String imageUrl) {
         return insertAndReturnId(
                 """
-                INSERT INTO garment_products (category_id, name, status)
-                VALUES (?, ?, ?)
+                INSERT INTO garment_products (category_id, name, image_url, status)
+                VALUES (?, ?, ?, ?)
                 """,
                 statement -> {
                     statement.setLong(1, categoryId);
                     statement.setString(2, productName);
-                    statement.setString(3, ProductStatus.ACTIVE.name());
+                    statement.setString(3, imageUrl);
+                    statement.setString(4, ProductStatus.ACTIVE.name());
                 });
     }
 
@@ -136,15 +138,17 @@ public class JdbcProductRepository implements ProductRepository {
     }
 
     @Override
-    public int updateProduct(long productId, long categoryId, String productName) {
+    public int updateProduct(
+            long productId, long categoryId, String productName, String imageUrl) {
         return jdbcTemplate.update(
                 """
                 UPDATE garment_products
-                SET category_id = ?, name = ?, updated_at = CURRENT_TIMESTAMP(6)
+                SET category_id = ?, name = ?, image_url = ?, updated_at = CURRENT_TIMESTAMP(6)
                 WHERE id = ?
                 """,
                 categoryId,
                 productName,
+                imageUrl,
                 productId);
     }
 
@@ -296,6 +300,7 @@ public class JdbcProductRepository implements ProductRepository {
                 resultSet.getLong("category_id"),
                 resultSet.getString("product_name"),
                 resultSet.getString("product_description"),
+                resultSet.getString("product_image_url"),
                 ProductStatus.valueOf(resultSet.getString("product_status")),
                 instant(resultSet, "product_created_at"),
                 instant(resultSet, "product_updated_at"));

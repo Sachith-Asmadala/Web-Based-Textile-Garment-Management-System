@@ -30,30 +30,58 @@ class DatabaseMigrationTests {
             try (Liquibase liquibase = new Liquibase(
                     CHANGELOG, new ClassLoaderResourceAccessor(), database)) {
                 liquibase.update(new Contexts(), new LabelExpression());
-                assertThat(executedChangeSetCount(connection)).isEqualTo(6);
+                assertThat(executedChangeSetCount(connection)).isEqualTo(20);
                 assertThat(applicationTables(connection))
                         .containsExactly(
+                                "DELIVERIES",
                                 "GARMENT_CATEGORIES",
                                 "GARMENT_PRODUCTS",
                                 "GARMENT_PRODUCT_VARIANTS",
                                 "INVENTORY_MATERIALS",
                                 "MATERIAL_SUPPLIES",
+                                "NOTIFICATIONS",
+                                "ORDERS",
+                                "ORDER_INVOICES",
+                                "ORDER_ITEMS",
+                                "ORDER_PAYMENT_RECORDS",
+                                "ORDER_STATUS_HISTORY",
+                                "PASSWORD_RESET_TOKENS",
+                                "PRODUCTION_TASKS",
+                                "PRODUCTION_TASK_DETAILS",
+                                "PRODUCTION_TASK_MATERIAL_REQUIREMENTS",
+                                "PRODUCTION_TASK_MATERIAL_USAGE",
+                                "QUOTATIONS",
+                                "QUOTATION_ITEMS",
                                 "SUPPLIER_PROFILES",
                                 "USERS");
 
-                liquibase.rollback(6, new Contexts(), new LabelExpression());
+                liquibase.rollback(20, new Contexts(), new LabelExpression());
                 assertThat(executedChangeSetCount(connection)).isZero();
                 assertThat(applicationTables(connection)).isEmpty();
 
                 liquibase.update(new Contexts(), new LabelExpression());
-                assertThat(executedChangeSetCount(connection)).isEqualTo(6);
+                assertThat(executedChangeSetCount(connection)).isEqualTo(20);
                 assertThat(applicationTables(connection))
                         .containsExactly(
+                                "DELIVERIES",
                                 "GARMENT_CATEGORIES",
                                 "GARMENT_PRODUCTS",
                                 "GARMENT_PRODUCT_VARIANTS",
                                 "INVENTORY_MATERIALS",
                                 "MATERIAL_SUPPLIES",
+                                "NOTIFICATIONS",
+                                "ORDERS",
+                                "ORDER_INVOICES",
+                                "ORDER_ITEMS",
+                                "ORDER_PAYMENT_RECORDS",
+                                "ORDER_STATUS_HISTORY",
+                                "PASSWORD_RESET_TOKENS",
+                                "PRODUCTION_TASKS",
+                                "PRODUCTION_TASK_DETAILS",
+                                "PRODUCTION_TASK_MATERIAL_REQUIREMENTS",
+                                "PRODUCTION_TASK_MATERIAL_USAGE",
+                                "QUOTATIONS",
+                                "QUOTATION_ITEMS",
                                 "SUPPLIER_PROFILES",
                                 "USERS");
             }

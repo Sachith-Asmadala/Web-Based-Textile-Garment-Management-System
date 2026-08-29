@@ -1,7 +1,17 @@
+import { Layers3, ShieldCheck, Shirt } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 
-import { getApiErrorMessage, registerCustomer } from "../api/auth";
+import {
+  getApiErrorMessage,
+  registerCustomer,
+  requestPasswordReset,
+  resetPassword,
+} from "../api/auth";
+import { BrandIdentity, BrandLockup } from "../components/BrandLogo";
+import { StarsBackground } from "../components/StarsBackground";
+import { buttonStyles } from "../components/ui/buttonStyles";
+import { ThemeToggle } from "../components/ui/ThemeToggle";
 import { useAuth } from "./useAuth";
 
 function AuthCard({
@@ -14,26 +24,43 @@ function AuthCard({
   children: React.ReactNode;
 }) {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 py-12 text-slate-100">
-      <section className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-2xl shadow-black/30">
-        <Link className="text-sm font-medium text-teal-400 hover:text-teal-300" to="/">
-          ← Public home
-        </Link>
-        <p className="mt-8 text-sm font-semibold uppercase tracking-[0.2em] text-teal-400">
-          {eyebrow}
-        </p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight">{title}</h1>
-        {children}
-      </section>
-    </main>
+    <StarsBackground className="min-h-screen">
+      <main className="relative flex min-h-screen items-center justify-center px-4 py-8 text-foreground sm:px-6 lg:py-12">
+        <div className="absolute right-4 top-4 z-20 sm:right-6 sm:top-6"><ThemeToggle compact /></div>
+        <section className="motion-auth-card app-shadow grid w-full max-w-5xl overflow-hidden rounded-3xl border border-border bg-surface/95 backdrop-blur-md lg:grid-cols-[1.05fr_.95fr]">
+          <aside className="motion-auth-visual textile-grid relative hidden min-h-[44rem] overflow-hidden bg-primary-soft p-10 lg:flex lg:flex-col lg:justify-between">
+            <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full border-[3rem] border-primary/10" />
+            <Link aria-label="LankaWear Apparel home" className="relative w-fit" to="/"><BrandIdentity /></Link>
+            <div className="relative">
+              <BrandLockup className="mb-7 w-full max-w-sm" />
+              <span className="grid h-14 w-14 place-items-center rounded-2xl border border-primary/20 bg-surface/80 text-primary"><Shirt aria-hidden="true" className="h-7 w-7" /></span>
+              <h2 className="mt-6 max-w-md text-3xl font-bold tracking-tight text-foreground">One secure workspace for connected garment operations.</h2>
+              <p className="mt-4 max-w-md leading-7 text-foreground-muted">Access the products, materials, orders, production and delivery tools permitted for your account.</p>
+            </div>
+            <div className="relative grid gap-3 text-sm text-foreground-muted">
+              <span className="flex items-center gap-3"><ShieldCheck aria-hidden="true" className="h-5 w-5 text-primary" />Role-based, server-enforced access</span>
+              <span className="flex items-center gap-3"><Layers3 aria-hidden="true" className="h-5 w-5 text-primary" />Connected operational records</span>
+            </div>
+          </aside>
+          <div className="flex min-h-[36rem] items-center p-6 sm:p-10 lg:p-12">
+            <div className="w-full">
+              <Link className="text-sm font-semibold text-primary hover:text-primary-hover" to="/">← Public home</Link>
+              <p className="mt-8 text-sm font-semibold tracking-wide text-primary">{eyebrow}</p>
+              <h1 className="mt-2 text-3xl font-bold tracking-tight text-foreground">{title}</h1>
+              {children}
+            </div>
+          </div>
+        </section>
+      </main>
+    </StarsBackground>
   );
 }
 
 const fieldClassName =
-  "mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20";
+  "mt-2 min-h-12 w-full rounded-xl border border-border-strong bg-surface-elevated px-4 py-3 text-foreground outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/15";
 
 const buttonClassName =
-  "mt-6 w-full rounded-xl bg-teal-400 px-4 py-3 font-semibold text-slate-950 transition hover:bg-teal-300 disabled:cursor-not-allowed disabled:opacity-60";
+  buttonStyles({ className: "mt-6 w-full", size: "lg" });
 
 export function LoginPage() {
   const { user, isLoading: isSessionLoading, login } = useAuth();
@@ -78,8 +105,16 @@ export function LoginPage() {
             value={email}
           />
         </label>
-        <label className="block text-sm font-medium" htmlFor="login-password">
-          Password
+        <div>
+          <div className="flex items-center justify-between gap-3">
+            <label className="block text-sm font-medium" htmlFor="login-password">Password</label>
+            <Link
+              className="text-xs font-medium text-primary hover:text-primary"
+              to="/forgot-password"
+            >
+              Forgot password?
+            </Link>
+          </div>
           <input
             autoComplete="current-password"
             className={fieldClassName}
@@ -91,9 +126,9 @@ export function LoginPage() {
             type="password"
             value={password}
           />
-        </label>
+        </div>
         {error ? (
-          <p aria-live="polite" className="rounded-xl bg-rose-950/60 p-3 text-sm text-rose-200" role="alert">
+          <p aria-live="polite" className="rounded-xl bg-danger-soft p-3 text-sm text-danger" role="alert">
             {error}
           </p>
         ) : null}
@@ -101,12 +136,214 @@ export function LoginPage() {
           {isSubmitting ? "Signing in…" : "Sign in"}
         </button>
       </form>
-      <p className="mt-6 text-center text-sm text-slate-400">
+      <p className="mt-6 text-center text-sm text-muted">
         New customer?{" "}
-        <Link className="font-medium text-teal-400 hover:text-teal-300" to="/register">
+        <Link className="font-medium text-primary hover:text-primary" to="/register">
           Create an account
         </Link>
       </p>
+    </AuthCard>
+  );
+}
+
+export function ForgotPasswordPage() {
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isComplete, setIsComplete] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setIsSubmitting(true);
+
+    try {
+      await requestPasswordReset({ email });
+      setIsComplete(true);
+    } catch (requestError: unknown) {
+      setError(getApiErrorMessage(
+        requestError,
+        "We could not process the reset request. Please try again.",
+      ));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  if (isComplete) {
+    return (
+      <AuthCard eyebrow="Account recovery" title="Check your email">
+        <p
+          aria-live="polite"
+          className="mt-6 rounded-xl bg-success-soft p-4 text-sm text-success"
+        >
+          If an active account matches that email, a password reset link will be sent.
+        </p>
+        <p className="mt-4 text-sm text-muted">
+          For security, the reset link is temporary and can only be used once.
+        </p>
+        <Link className={`${buttonClassName} block text-center`} to="/login">
+          Return to sign in
+        </Link>
+      </AuthCard>
+    );
+  }
+
+  return (
+    <AuthCard eyebrow="Account recovery" title="Reset your password">
+      <p className="mt-4 text-sm leading-6 text-muted">
+        Enter the email address for your account. We will send reset instructions when the account
+        is eligible for recovery.
+      </p>
+      <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
+        <label className="block text-sm font-medium" htmlFor="forgot-email">
+          Email address
+          <input
+            autoComplete="email"
+            className={fieldClassName}
+            id="forgot-email"
+            maxLength={254}
+            name="email"
+            onChange={(event) => setEmail(event.target.value)}
+            required
+            type="email"
+            value={email}
+          />
+        </label>
+        {error ? (
+          <p
+            aria-live="polite"
+            className="rounded-xl bg-danger-soft p-3 text-sm text-danger"
+            role="alert"
+          >
+            {error}
+          </p>
+        ) : null}
+        <button className={buttonClassName} disabled={isSubmitting} type="submit">
+          {isSubmitting ? "Sending instructions…" : "Send reset instructions"}
+        </button>
+      </form>
+      <p className="mt-6 text-center text-sm text-muted">
+        Remembered your password?{" "}
+        <Link className="font-medium text-primary hover:text-primary" to="/login">
+          Sign in
+        </Link>
+      </p>
+    </AuthCard>
+  );
+}
+
+export function ResetPasswordPage() {
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get("token")?.trim() ?? "";
+  const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isComplete, setIsComplete] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+
+    if (password !== confirmation) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await resetPassword({ token, password });
+      setIsComplete(true);
+    } catch (resetError: unknown) {
+      setError(getApiErrorMessage(
+        resetError,
+        "This password reset link is invalid or has expired. Request a new reset link.",
+      ));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  if (!token) {
+    return (
+      <AuthCard eyebrow="Account recovery" title="Invalid reset link">
+        <p className="mt-6 rounded-xl bg-danger-soft p-4 text-sm text-danger" role="alert">
+          This password reset link is invalid or incomplete. Request a new reset link to continue.
+        </p>
+        <Link className={`${buttonClassName} block text-center`} to="/forgot-password">
+          Request a new reset link
+        </Link>
+      </AuthCard>
+    );
+  }
+
+  if (isComplete) {
+    return (
+      <AuthCard eyebrow="Account recovery" title="Password updated">
+        <p
+          aria-live="polite"
+          className="mt-6 rounded-xl bg-success-soft p-4 text-sm text-success"
+        >
+          Your password has been updated successfully. The reset link cannot be used again.
+        </p>
+        <Link className={`${buttonClassName} block text-center`} to="/login">
+          Sign in with new password
+        </Link>
+      </AuthCard>
+    );
+  }
+
+  return (
+    <AuthCard eyebrow="Account recovery" title="Choose a new password">
+      <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
+        <div>
+          <label className="block text-sm font-medium" htmlFor="reset-password">New password</label>
+          <input
+            aria-describedby="reset-password-help"
+            autoComplete="new-password"
+            className={fieldClassName}
+            id="reset-password"
+            maxLength={72}
+            minLength={8}
+            name="password"
+            onChange={(event) => setPassword(event.target.value)}
+            required
+            type="password"
+            value={password}
+          />
+          <span className="mt-2 block text-xs text-muted" id="reset-password-help">
+            Use 8–72 characters.
+          </span>
+        </div>
+        <label className="block text-sm font-medium" htmlFor="reset-confirmation">
+          Confirm new password
+          <input
+            autoComplete="new-password"
+            className={fieldClassName}
+            id="reset-confirmation"
+            maxLength={72}
+            minLength={8}
+            name="passwordConfirmation"
+            onChange={(event) => setConfirmation(event.target.value)}
+            required
+            type="password"
+            value={confirmation}
+          />
+        </label>
+        {error ? (
+          <p
+            aria-live="polite"
+            className="rounded-xl bg-danger-soft p-3 text-sm text-danger"
+            role="alert"
+          >
+            {error}
+          </p>
+        ) : null}
+        <button className={buttonClassName} disabled={isSubmitting} type="submit">
+          {isSubmitting ? "Updating password…" : "Update password"}
+        </button>
+      </form>
     </AuthCard>
   );
 }
@@ -148,7 +385,7 @@ export function RegistrationPage() {
   if (isComplete) {
     return (
       <AuthCard eyebrow="Account created" title="Registration complete">
-        <p aria-live="polite" className="mt-6 rounded-xl bg-emerald-950/60 p-4 text-emerald-200">
+        <p aria-live="polite" className="mt-6 rounded-xl bg-success-soft p-4 text-success">
           Your customer account is ready. Sign in with your email and password.
         </p>
         <Link className={`${buttonClassName} block text-center`} to="/login">
@@ -188,8 +425,8 @@ export function RegistrationPage() {
             value={email}
           />
         </label>
-        <label className="block text-sm font-medium" htmlFor="register-password">
-          Password
+        <div>
+          <label className="block text-sm font-medium" htmlFor="register-password">Password</label>
           <input
             aria-describedby="password-help"
             autoComplete="new-password"
@@ -203,10 +440,10 @@ export function RegistrationPage() {
             type="password"
             value={password}
           />
-          <span className="mt-2 block text-xs text-slate-400" id="password-help">
+          <span className="mt-2 block text-xs text-muted" id="password-help">
             Use 8–72 characters.
           </span>
-        </label>
+        </div>
         <label className="block text-sm font-medium" htmlFor="register-confirmation">
           Confirm password
           <input
@@ -223,7 +460,7 @@ export function RegistrationPage() {
           />
         </label>
         {error ? (
-          <p aria-live="polite" className="rounded-xl bg-rose-950/60 p-3 text-sm text-rose-200" role="alert">
+          <p aria-live="polite" className="rounded-xl bg-danger-soft p-3 text-sm text-danger" role="alert">
             {error}
           </p>
         ) : null}
@@ -231,9 +468,9 @@ export function RegistrationPage() {
           {isSubmitting ? "Creating account…" : "Create customer account"}
         </button>
       </form>
-      <p className="mt-6 text-center text-sm text-slate-400">
+      <p className="mt-6 text-center text-sm text-muted">
         Already registered?{" "}
-        <Link className="font-medium text-teal-400 hover:text-teal-300" to="/login">
+        <Link className="font-medium text-primary hover:text-primary" to="/login">
           Sign in
         </Link>
       </p>

@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -100,17 +101,107 @@ public class JdbcInventoryMaterialRepository implements InventoryMaterialReposit
     }
 
     @Override
-    public List<InventoryMaterial> findAll() {
-        return jdbcTemplate.query(
-                """
+    public List<InventoryMaterial> findAll(InventoryMaterialQuery filter) {
+        StringBuilder query = new StringBuilder("""
                 SELECT id, source_material_supply_id, material_code, material_name,
                        material_description, material_type, unit_of_measure,
                        current_quantity, low_stock_threshold, status,
                        created_at, updated_at
                 FROM inventory_materials
-                ORDER BY created_at DESC, id DESC
+                WHERE 1 = 1
+                """);
+        List<Object> parameters = new ArrayList<>();
+
+        if (filter.search() != null) {
+            query.append("""
+                     AND (LOWER(material_code) LIKE ?
+                          OR LOWER(material_name) LIKE ?
+                          OR LOWER(COALESCE(material_description, '')) LIKE ?
+                          OR LOWER(unit_of_measure) LIKE ?)
+                    """);
+            String searchPattern = "%" + escapeLike(filter.search().toLowerCase()) + "%";
+            for (int index = 0; index < 4; index++) {
+                parameters.add(searchPattern);
+            }
+        }
+        if (filter.status() != null) {
+            query.append(" AND status = ?");
+            parameters.add(filter.status().name());
+        }
+        if (filter.materialType() != null) {
+            query.append(" AND material_type = ?");
+            parameters.add(filter.materialType().name());
+        }
+        query.append(" ORDER BY created_at DESC, id DESC");
+
+        return jdbcTemplate.query(query.toString(), MATERIAL_MAPPER, parameters.toArray());
+    }
+
+    private String escapeLike(String value) {
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+    }
+
+    @Override
+    public int updateMetadata(
+            long materialId,
+            String materialCode,
+            String materialName,
+            String materialDescription,
+            InventoryMaterialType materialType,
+            String unitOfMeasure,
+            BigDecimal lowStockThreshold,
+            InventoryMaterialStatus status) {
+        return jdbcTemplate.update(
+                """
+                UPDATE inventory_materials
+                SET material_code = ?,
+                    material_name = ?,
+                    material_description = ?,
+                    material_type = ?,
+                    unit_of_measure = ?,
+                    low_stock_threshold = ?,
+                    status = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                  AND status <> 'DISCONTINUED'
                 """,
-                MATERIAL_MAPPER);
+                materialCode,
+                materialName,
+                materialDescription,
+                materialType.name(),
+                unitOfMeasure,
+                lowStockThreshold,
+                status.name(),
+                materialId);
+    }
+
+    @Override
+    public int archive(long materialId) {
+        return jdbcTemplate.update(
+                """
+                UPDATE inventory_materials
+                SET status = 'DISCONTINUED',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                  AND status <> 'DISCONTINUED'
+                """,
+                materialId);
+    }
+
+    @Override
+    public int consumeStockIfAvailable(long materialId, BigDecimal quantity) {
+        return jdbcTemplate.update(
+                """
+                UPDATE inventory_materials
+                SET current_quantity = current_quantity - ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                  AND status = 'ACTIVE'
+                  AND current_quantity >= ?
+                """,
+                quantity,
+                materialId,
+                quantity);
     }
 
     private static InventoryMaterial mapMaterial(ResultSet resultSet) throws SQLException {

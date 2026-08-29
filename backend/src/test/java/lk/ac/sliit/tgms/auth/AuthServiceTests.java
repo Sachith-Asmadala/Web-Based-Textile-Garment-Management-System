@@ -24,7 +24,7 @@ class AuthServiceTests {
     void setUp() {
         repository = mock(UserAccountRepository.class);
         passwordEncoder = new BCryptPasswordEncoder(4);
-        authService = new AuthService(repository, passwordEncoder);
+        authService = new AuthService(repository, passwordEncoder, new PasswordPolicy());
     }
 
     @Test

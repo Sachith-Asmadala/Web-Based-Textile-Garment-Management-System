@@ -34,9 +34,10 @@ class GarmentProductSchemaTests {
                     "T-Shirts");
             long productId = insertAndReturnId(
                     connection,
-                    "INSERT INTO garment_products (category_id, name) VALUES (?, ?)",
+                    "INSERT INTO garment_products (category_id, name, image_url) VALUES (?, ?, ?)",
                     categoryId,
-                    "Classic Crew Neck");
+                    "Classic Crew Neck",
+                    "/products/demo/colombo-classic-polo.jpg");
             long firstVariantId = insertAndReturnId(
                     connection,
                     """
@@ -64,6 +65,8 @@ class GarmentProductSchemaTests {
             assertThat(firstVariantId).isPositive().isNotEqualTo(secondVariantId);
             assertThat(readPrice(connection, firstVariantId))
                     .isEqualByComparingTo("2499.90");
+            assertThat(readProductImageUrl(connection, productId))
+                    .isEqualTo("/products/demo/colombo-classic-polo.jpg");
         }
     }
 
@@ -180,6 +183,17 @@ class GarmentProductSchemaTests {
             try (ResultSet resultSet = statement.executeQuery()) {
                 assertThat(resultSet.next()).isTrue();
                 return resultSet.getBigDecimal("price");
+            }
+        }
+    }
+
+    private String readProductImageUrl(Connection connection, long productId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT image_url FROM garment_products WHERE id = ?")) {
+            statement.setLong(1, productId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                assertThat(resultSet.next()).isTrue();
+                return resultSet.getString("image_url");
             }
         }
     }

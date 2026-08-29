@@ -10,7 +10,7 @@ public interface ProductRepository {
 
     long createCategory(String categoryName);
 
-    long createProduct(long categoryId, String productName);
+    long createProduct(long categoryId, String productName, String imageUrl);
 
     long createVariant(
             long productId,
@@ -19,7 +19,7 @@ public interface ProductRepository {
             BigDecimal price,
             VariantStatus status);
 
-    int updateProduct(long productId, long categoryId, String productName);
+    int updateProduct(long productId, long categoryId, String productName, String imageUrl);
 
     int updateVariant(
             long productId,

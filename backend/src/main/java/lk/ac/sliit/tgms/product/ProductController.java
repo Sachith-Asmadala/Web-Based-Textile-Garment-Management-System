@@ -41,6 +41,7 @@ public class ProductController {
         GarmentProductDetails details = productService.createProduct(
                 request.name(),
                 request.category(),
+                request.imageUrl(),
                 request.size(),
                 request.color(),
                 request.price(),
@@ -87,6 +88,7 @@ public class ProductController {
                 request.variantId(),
                 request.name(),
                 request.category(),
+                request.imageUrl(),
                 request.size(),
                 request.color(),
                 request.price(),
@@ -120,6 +122,8 @@ public class ProductController {
             @NotBlank(message = "Category is required.")
                     @Size(max = 100, message = "Category must not exceed 100 characters.")
                     String category,
+            @Size(max = 500, message = "Product image URL must not exceed 500 characters.")
+                    String imageUrl,
             @NotBlank(message = "Size is required.")
                     @Size(max = 32, message = "Size must not exceed 32 characters.")
                     String size,
@@ -148,6 +152,8 @@ public class ProductController {
             @NotBlank(message = "Category is required.")
                     @Size(max = 100, message = "Category must not exceed 100 characters.")
                     String category,
+            @Size(max = 500, message = "Product image URL must not exceed 500 characters.")
+                    String imageUrl,
             @NotBlank(message = "Size is required.")
                     @Size(max = 32, message = "Size must not exceed 32 characters.")
                     String size,
@@ -173,6 +179,7 @@ public class ProductController {
             long categoryId,
             String name,
             String description,
+            String imageUrl,
             ProductStatus status,
             Instant createdAt,
             Instant updatedAt,
@@ -186,6 +193,7 @@ public class ProductController {
                     product.categoryId(),
                     product.name(),
                     product.description(),
+                    product.imageUrl(),
                     product.status(),
                     product.createdAt(),
                     product.updatedAt(),

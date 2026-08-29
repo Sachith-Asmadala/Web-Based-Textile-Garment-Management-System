@@ -13,10 +13,11 @@ import {
   type ProductField,
   type ProductFieldErrors,
 } from "./productForm";
+import { ProductImage } from "./ProductImage";
 import type { GarmentProductDetails } from "./productTypes";
 
 const inputClassName =
-  "mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 aria-invalid:border-rose-500";
+  "mt-2 w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 aria-invalid:border-danger-border";
 
 
 function FieldError({ id, message }: { id: string; message?: string }) {
@@ -24,7 +25,7 @@ function FieldError({ id, message }: { id: string; message?: string }) {
     return null;
   }
   return (
-    <span className="mt-2 block text-sm text-rose-300" id={id}>
+    <span className="mt-2 block text-sm text-danger" id={id}>
       {message}
     </span>
   );
@@ -79,38 +80,45 @@ export function AddProductPage() {
     const variant = savedProduct.variants[0];
     return (
       <section className="px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
-        <div className="mx-auto max-w-3xl rounded-3xl border border-emerald-800/70 bg-emerald-950/30 p-7 sm:p-10">
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-300">
+        <div className="mx-auto max-w-3xl rounded-3xl border border-success-border bg-success-soft p-7 sm:p-10">
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-success">
             Product saved
           </p>
-          <h1 className="mt-3 text-3xl font-bold text-white">{savedProduct.name}</h1>
-          <p aria-live="polite" className="mt-3 text-emerald-100">
+          <h1 className="mt-3 text-3xl font-bold text-foreground">{savedProduct.name}</h1>
+          <p aria-live="polite" className="mt-3 text-success">
             The garment product and its first variant were saved successfully.
           </p>
-          <dl className="mt-8 grid gap-4 rounded-2xl border border-emerald-900 bg-slate-950/60 p-5 sm:grid-cols-2">
+          <ProductImage
+            alt={`${savedProduct.name} catalog presentation`}
+            className="mt-7 aspect-square w-full rounded-2xl border border-success-border"
+            loading="eager"
+            productName={savedProduct.name}
+            src={savedProduct.imageUrl}
+          />
+          <dl className="mt-8 grid gap-4 rounded-2xl border border-success-border bg-background/60 p-5 sm:grid-cols-2">
             <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Product ID</dt>
-              <dd className="mt-1 font-semibold text-white">{savedProduct.id}</dd>
+              <dt className="text-xs uppercase tracking-wide text-muted">Product ID</dt>
+              <dd className="mt-1 font-semibold text-foreground">{savedProduct.id}</dd>
             </div>
             <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Category</dt>
-              <dd className="mt-1 font-semibold text-white">{savedProduct.category.name}</dd>
+              <dt className="text-xs uppercase tracking-wide text-muted">Category</dt>
+              <dd className="mt-1 font-semibold text-foreground">{savedProduct.category.name}</dd>
             </div>
             <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Variant</dt>
-              <dd className="mt-1 font-semibold text-white">
+              <dt className="text-xs uppercase tracking-wide text-muted">Variant</dt>
+              <dd className="mt-1 font-semibold text-foreground">
                 {variant.size} · {variant.color}
               </dd>
             </div>
             <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Price / availability</dt>
-              <dd className="mt-1 font-semibold text-white">
+              <dt className="text-xs uppercase tracking-wide text-muted">Price / availability</dt>
+              <dd className="mt-1 font-semibold text-foreground">
                 {variant.price} · {variant.status.toLowerCase()}
               </dd>
             </div>
           </dl>
           <button
-            className="mt-8 rounded-xl bg-teal-400 px-5 py-3 font-semibold text-slate-950 transition hover:bg-teal-300"
+            className="mt-8 rounded-xl bg-primary px-5 py-3 font-semibold text-primary-foreground transition hover:bg-primary-hover"
             onClick={resetForm}
             type="button"
           >
@@ -124,24 +132,24 @@ export function AddProductPage() {
   return (
     <section className="px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
       <div className="mx-auto max-w-4xl">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-teal-300">
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">
           Garment Product Management
         </p>
-        <h1 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+        <h1 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
           Add garment product
         </h1>
-        <p className="mt-3 max-w-2xl leading-7 text-slate-400">
+        <p className="mt-3 max-w-2xl leading-7 text-muted">
           Create the product and its first sellable size and color variant. Existing active
           category names are reused automatically.
         </p>
 
         <form
-          className="mt-8 rounded-3xl border border-slate-800 bg-slate-900/70 p-6 sm:p-8"
+          className="mt-8 rounded-3xl border border-border bg-surface/70 p-6 sm:p-8"
           noValidate
           onSubmit={handleSubmit}
         >
           <div className="grid gap-6 sm:grid-cols-2">
-            <label className="block text-sm font-medium text-slate-200" htmlFor="product-name">
+            <label className="block text-sm font-medium text-foreground" htmlFor="product-name">
               Product name
               <input
                 aria-describedby={fieldErrors.name ? "product-name-error" : undefined}
@@ -156,7 +164,7 @@ export function AddProductPage() {
               <FieldError id="product-name-error" message={fieldErrors.name} />
             </label>
 
-            <label className="block text-sm font-medium text-slate-200" htmlFor="product-category">
+            <label className="block text-sm font-medium text-foreground" htmlFor="product-category">
               Category
               <input
                 aria-label="Category"
@@ -169,13 +177,33 @@ export function AddProductPage() {
                 onChange={(event) => updateField("category", event.target.value)}
                 value={form.category}
               />
-              <span className="mt-2 block text-xs text-slate-500" id="product-category-help">
+              <span className="mt-2 block text-xs text-muted" id="product-category-help">
                 Matching category names reuse the existing category record.
               </span>
               <FieldError id="product-category-error" message={fieldErrors.category} />
             </label>
 
-            <label className="block text-sm font-medium text-slate-200" htmlFor="product-size">
+            <label className="block text-sm font-medium text-foreground sm:col-span-2" htmlFor="product-image-url">
+              Product image URL or path <span className="font-normal text-muted">(optional)</span>
+              <input
+                aria-describedby={fieldErrors.imageUrl ? "product-image-url-error" : "product-image-url-help"}
+                aria-invalid={Boolean(fieldErrors.imageUrl)}
+                autoComplete="off"
+                className={inputClassName}
+                id="product-image-url"
+                inputMode="url"
+                maxLength={500}
+                onChange={(event) => updateField("imageUrl", event.target.value)}
+                placeholder="https://… or /products/your-image.jpg"
+                value={form.imageUrl ?? ""}
+              />
+              <span className="mt-2 block text-xs text-muted" id="product-image-url-help">
+                Add an HTTPS image or a managed local product-media path. The value is stored with the product record.
+              </span>
+              <FieldError id="product-image-url-error" message={fieldErrors.imageUrl} />
+            </label>
+
+            <label className="block text-sm font-medium text-foreground" htmlFor="product-size">
               Size
               <input
                 aria-describedby={fieldErrors.size ? "product-size-error" : undefined}
@@ -190,7 +218,7 @@ export function AddProductPage() {
               <FieldError id="product-size-error" message={fieldErrors.size} />
             </label>
 
-            <label className="block text-sm font-medium text-slate-200" htmlFor="product-color">
+            <label className="block text-sm font-medium text-foreground" htmlFor="product-color">
               Color
               <input
                 aria-describedby={fieldErrors.color ? "product-color-error" : undefined}
@@ -205,7 +233,7 @@ export function AddProductPage() {
               <FieldError id="product-color-error" message={fieldErrors.color} />
             </label>
 
-            <label className="block text-sm font-medium text-slate-200" htmlFor="product-price">
+            <label className="block text-sm font-medium text-foreground" htmlFor="product-price">
               Price
               <input
                 aria-label="Price"
@@ -218,13 +246,13 @@ export function AddProductPage() {
                 placeholder="0.00"
                 value={form.price}
               />
-              <span className="mt-2 block text-xs text-slate-500" id="product-price-help">
+              <span className="mt-2 block text-xs text-muted" id="product-price-help">
                 Enter a positive amount with no more than two decimal places.
               </span>
               <FieldError id="product-price-error" message={fieldErrors.price} />
             </label>
 
-            <label className="block text-sm font-medium text-slate-200" htmlFor="product-availability">
+            <label className="block text-sm font-medium text-foreground" htmlFor="product-availability">
               Availability
               <select
                 className={inputClassName}
@@ -244,7 +272,7 @@ export function AddProductPage() {
           {submissionError ? (
             <p
               aria-live="polite"
-              className="mt-6 rounded-xl border border-rose-900 bg-rose-950/60 p-4 text-sm text-rose-200"
+              className="mt-6 rounded-xl border border-danger-border bg-danger-soft p-4 text-sm text-danger"
               role="alert"
             >
               {submissionError}
@@ -253,13 +281,13 @@ export function AddProductPage() {
 
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <button
-              className="rounded-xl bg-teal-400 px-6 py-3 font-semibold text-slate-950 transition hover:bg-teal-300 disabled:cursor-wait disabled:opacity-60"
+              className="rounded-xl bg-primary px-6 py-3 font-semibold text-primary-foreground transition hover:bg-primary-hover disabled:cursor-wait disabled:opacity-60"
               disabled={isSubmitting}
               type="submit"
             >
               {isSubmitting ? "Saving product…" : "Save garment product"}
             </button>
-            <p className="text-sm text-slate-500">All fields are required.</p>
+            <p className="text-sm text-muted">All fields are required.</p>
           </div>
         </form>
       </div>

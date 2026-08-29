@@ -9,6 +9,7 @@ import {
   type RoleAccessResponse,
 } from "../api/roleAccess";
 import { ErrorState, LoadingState } from "../components/AppStates";
+import { StarsBackground } from "../components/StarsBackground";
 import { useAuth } from "./useAuth";
 
 function StatePage({
@@ -23,42 +24,26 @@ function StatePage({
   action?: React.ReactNode;
 }) {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 py-12 text-slate-100">
-      <section className="w-full max-w-xl rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-2xl shadow-black/30 sm:p-12">
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-400">
-          {eyebrow}
-        </p>
-        <h1 className="mt-3 text-3xl font-bold tracking-tight">{title}</h1>
-        <p className="mt-5 leading-7 text-slate-300">{message}</p>
-        <div className="mt-8 flex flex-wrap gap-3">
-          {action}
-          <Link
-            className="rounded-full border border-slate-700 px-5 py-2 text-sm font-semibold hover:border-teal-400"
-            to="/"
-          >
-            Public home
-          </Link>
-        </div>
-      </section>
-    </main>
-  );
-}
-
-export function AuthenticationRequiredPage() {
-  return (
-    <StatePage
-      action={
-        <Link
-          className="rounded-full bg-teal-400 px-5 py-2 text-sm font-semibold text-slate-950 hover:bg-teal-300"
-          to="/login"
-        >
-          Sign in
-        </Link>
-      }
-      eyebrow="401 · Authentication required"
-      message="Sign in with an authorized account before opening this protected page."
-      title="Authentication required"
-    />
+    <StarsBackground className="min-h-screen">
+      <main className="flex min-h-screen items-center justify-center px-6 py-12 text-foreground">
+        <section className="w-full max-w-xl rounded-3xl border border-border bg-surface/95 p-8 shadow-2xl shadow-black/30 backdrop-blur-md sm:p-12">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">
+            {eyebrow}
+          </p>
+          <h1 className="mt-3 text-3xl font-bold tracking-tight">{title}</h1>
+          <p className="mt-5 leading-7 text-foreground-muted">{message}</p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            {action}
+            <Link
+              className="rounded-full border border-border px-5 py-2 text-sm font-semibold hover:border-primary"
+              to="/"
+            >
+              Public home
+            </Link>
+          </div>
+        </section>
+      </main>
+    </StarsBackground>
   );
 }
 
@@ -104,7 +89,7 @@ export function ProtectedRoute({
   }
 
   if (!user) {
-    return <Navigate replace to="/unauthorized" />;
+    return <Navigate replace to="/" />;
   }
 
   if (!allowedRoles.includes(user.role)) {
@@ -145,8 +130,8 @@ export function RoleAccessPage({ role }: { role: InternalRole }) {
 
   return (
     <div className="mx-auto max-w-4xl p-6 sm:p-10 lg:p-12">
-      <section className="rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-2xl shadow-black/20 sm:p-10">
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-400">
+      <section className="rounded-3xl border border-border bg-surface p-8 shadow-2xl shadow-black/20 sm:p-10">
+        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">
           Protected role function
         </p>
         <h1 className="mt-3 text-3xl font-bold tracking-tight">{roleLabel}</h1>
@@ -158,9 +143,9 @@ export function RoleAccessPage({ role }: { role: InternalRole }) {
             />
           </div>
         ) : state.status === "success" ? (
-          <div className="mt-6 rounded-2xl bg-emerald-950/50 p-5 text-emerald-100">
+          <div className="mt-6 rounded-2xl bg-success-soft p-5 text-success">
             <p className="font-semibold">{state.response.message}</p>
-            <p className="mt-2 text-sm text-emerald-200">
+            <p className="mt-2 text-sm text-success">
               The server authorized {state.response.role.replaceAll("_", " ")}.
             </p>
           </div>
@@ -169,12 +154,12 @@ export function RoleAccessPage({ role }: { role: InternalRole }) {
             <ErrorState message={state.message} title="Authorization check failed" />
           </div>
         )}
-        <p className="mt-6 text-sm leading-6 text-slate-400">
+        <p className="mt-6 text-sm leading-6 text-muted">
           This page verifies the shared authorization boundary only. Business-module
           actions will be added by their approved tickets.
         </p>
         <Link
-          className="mt-8 inline-block rounded-full border border-slate-700 px-5 py-2 text-sm font-semibold hover:border-teal-400"
+          className="mt-8 inline-block rounded-full border border-border px-5 py-2 text-sm font-semibold hover:border-primary"
           to="/"
         >
           Return home

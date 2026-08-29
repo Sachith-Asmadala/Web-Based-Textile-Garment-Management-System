@@ -11,8 +11,8 @@
     "node": ">=20.19.0"
   },
   "scripts": {
-    "dev": "concurrently --names api,web --prefix-colors blue,magenta \"npm run dev:backend\" \"npm run dev --workspace frontend\"",
-    "dev:backend": "cd backend && ./mvnw spring-boot:run",
+    "dev": "concurrently --kill-others-on-fail --names api,web --prefix-colors blue,magenta \"npm run dev:backend\" \"node scripts/run-frontend-dev.mjs\"",
+    "dev:backend": "node scripts/run-backend-dev.mjs",
     "build": "npm run build --workspace frontend && npm run build:backend",
     "build:backend": "cd backend && ./mvnw clean package -DskipTests",
     "test": "npm run test:frontend && npm run test:backend",
@@ -26,7 +26,20 @@
     "typecheck": "npm run typecheck --workspace frontend && npm run compile:backend",
     "compile:backend": "cd backend && ./mvnw clean compile",
     "lint": "npm run lint --workspace frontend && eslint scripts",
-    "verify": "npm run lint && npm run typecheck && npm test && npm run db:verify && npm run build"
+    "verify": "npm run security:check && npm run lint && npm run typecheck && npm test && npm run db:verify && npm run build",
+    "security:check": "./scripts/security-check.sh",
+    "test:nfr": "cd backend && ./mvnw -Dtest=NonFunctionalRequirementsIntegrationTests test",
+    "test:uat": "./scripts/run-uat.sh",
+    "uat:catalog:check": "node scripts/verify-uat-catalog.mjs",
+    "deploy:env:check": "./scripts/deployment/check-production-env.sh",
+    "deploy:smoke": "./scripts/deployment/smoke-test.sh",
+    "db:backup": "./scripts/deployment/mysql-backup.sh",
+    "db:restore": "./scripts/deployment/mysql-restore.sh",
+    "deploy:verify": "node scripts/deployment/verify-deployment-assets.mjs",
+    "demo:reset": "dotenv -e backend/.env -- ./scripts/demo/reset-demo.sh --confirm RESET_TGMS_DEMO",
+    "demo:verify": "dotenv -e backend/.env -- ./scripts/demo/verify-demo-db.sh",
+    "demo:assets:check": "node scripts/demo/verify-demo-assets.mjs",
+    "handover:verify": "npm run demo:assets:check && npm run deploy:verify && npm run uat:catalog:check"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

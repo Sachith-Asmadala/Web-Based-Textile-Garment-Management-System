@@ -18,6 +18,7 @@ export interface GarmentProduct {
   categoryId: number;
   name: string;
   description: string | null;
+  imageUrl?: string | null;
   status: ProductStatus;
   createdAt: string;
   updatedAt: string;

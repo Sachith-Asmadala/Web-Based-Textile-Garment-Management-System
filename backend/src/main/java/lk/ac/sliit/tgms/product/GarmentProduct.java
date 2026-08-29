@@ -7,6 +7,19 @@ public record GarmentProduct(
         long categoryId,
         String name,
         String description,
+        String imageUrl,
         ProductStatus status,
         Instant createdAt,
-        Instant updatedAt) {}
+        Instant updatedAt) {
+
+    public GarmentProduct(
+            long id,
+            long categoryId,
+            String name,
+            String description,
+            ProductStatus status,
+            Instant createdAt,
+            Instant updatedAt) {
+        this(id, categoryId, name, description, null, status, createdAt, updatedAt);
+    }
+}

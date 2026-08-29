@@ -14,7 +14,7 @@ type SupplierProfileField = keyof SupplierProfileInput;
 type SupplierProfileFieldErrors = Partial<Record<SupplierProfileField, string>>;
 
 const inputClassName =
-  "mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 aria-invalid:border-rose-500";
+  "mt-2 w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 aria-invalid:border-danger-border";
 
 function emptyProfileForm(): SupplierProfileInput {
   return { businessName: "", contactPhone: "", address: "" };
@@ -66,7 +66,7 @@ function submitButtonLabel(isSubmitting: boolean, hasProfile: boolean) {
 
 function FieldError({ id, message }: { id: string; message?: string }) {
   return message ? (
-    <span className="mt-2 block text-sm text-rose-300" id={id}>
+    <span className="mt-2 block text-sm text-danger" id={id}>
       {message}
     </span>
   ) : null;
@@ -172,7 +172,7 @@ export function SupplierProfilePage() {
         <ErrorState
           action={(
             <button
-              className="rounded-full bg-teal-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-teal-200"
+              className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover"
               onClick={retryLoad}
               type="button"
             >
@@ -189,41 +189,41 @@ export function SupplierProfilePage() {
   return (
     <section className="px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
       <div className="mx-auto max-w-4xl">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-teal-300">
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">
           Supplier Management
         </p>
-        <h1 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+        <h1 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
           {profile ? "Edit supplier profile" : "Create supplier profile"}
         </h1>
-        <p className="mt-3 max-w-2xl leading-7 text-slate-400">
+        <p className="mt-3 max-w-2xl leading-7 text-muted">
           Maintain the business and contact information used by Supplier and Inventory
           Management. Your authenticated account owns this profile.
         </p>
 
-        <dl className="mt-6 grid gap-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-5 sm:grid-cols-2">
+        <dl className="mt-6 grid gap-4 rounded-2xl border border-border bg-surface/60 p-5 sm:grid-cols-2">
           <div>
-            <dt className="text-xs uppercase tracking-wide text-slate-500">Account holder</dt>
-            <dd className="mt-1 font-medium text-slate-100">{user?.fullName}</dd>
+            <dt className="text-xs uppercase tracking-wide text-muted">Account holder</dt>
+            <dd className="mt-1 font-medium text-foreground">{user?.fullName}</dd>
           </div>
           <div>
-            <dt className="text-xs uppercase tracking-wide text-slate-500">Login email</dt>
-            <dd className="mt-1 font-medium text-slate-100">{user?.email}</dd>
+            <dt className="text-xs uppercase tracking-wide text-muted">Login email</dt>
+            <dd className="mt-1 font-medium text-foreground">{user?.email}</dd>
           </div>
         </dl>
 
         {!profile ? (
-          <p className="mt-6 rounded-xl border border-amber-800 bg-amber-950/40 p-4 text-sm text-amber-100">
+          <p className="mt-6 rounded-xl border border-warning-border bg-warning-soft p-4 text-sm text-warning">
             No supplier profile exists yet. Complete the required fields to create one.
           </p>
         ) : null}
 
         <form
-          className="mt-6 rounded-3xl border border-slate-800 bg-slate-900/70 p-6 sm:p-8"
+          className="mt-6 rounded-3xl border border-border bg-surface/70 p-6 sm:p-8"
           noValidate
           onSubmit={handleSubmit}
         >
           <div className="grid gap-6 sm:grid-cols-2">
-            <label className="block text-sm font-medium text-slate-200" htmlFor="supplier-business-name">
+            <label className="block text-sm font-medium text-foreground" htmlFor="supplier-business-name">
               Business name
               <input
                 aria-describedby={fieldErrors.businessName ? "supplier-business-name-error" : undefined}
@@ -238,7 +238,7 @@ export function SupplierProfilePage() {
               <FieldError id="supplier-business-name-error" message={fieldErrors.businessName} />
             </label>
 
-            <label className="block text-sm font-medium text-slate-200" htmlFor="supplier-contact-phone">
+            <label className="block text-sm font-medium text-foreground" htmlFor="supplier-contact-phone">
               Contact phone
               <input
                 aria-describedby={fieldErrors.contactPhone ? "supplier-contact-phone-error" : undefined}
@@ -255,7 +255,7 @@ export function SupplierProfilePage() {
             </label>
           </div>
 
-          <label className="mt-6 block text-sm font-medium text-slate-200" htmlFor="supplier-address">
+          <label className="mt-6 block text-sm font-medium text-foreground" htmlFor="supplier-address">
             Address
             <textarea
               aria-describedby={fieldErrors.address ? "supplier-address-error" : undefined}
@@ -272,7 +272,7 @@ export function SupplierProfilePage() {
 
           {submissionError ? (
             <p
-              className="mt-6 rounded-xl border border-rose-900 bg-rose-950/60 p-4 text-sm text-rose-200"
+              className="mt-6 rounded-xl border border-danger-border bg-danger-soft p-4 text-sm text-danger"
               role="alert"
             >
               {submissionError}
@@ -281,14 +281,14 @@ export function SupplierProfilePage() {
           {successMessage ? (
             <p
               aria-live="polite"
-              className="mt-6 rounded-xl border border-emerald-800 bg-emerald-950/50 p-4 text-sm text-emerald-200"
+              className="mt-6 rounded-xl border border-success-border bg-success-soft p-4 text-sm text-success"
             >
               {successMessage} Supplier ID {profile?.id} remains linked only to your account.
             </p>
           ) : null}
 
           <button
-            className="mt-8 rounded-xl bg-teal-400 px-6 py-3 font-semibold text-slate-950 transition hover:bg-teal-300 disabled:cursor-wait disabled:opacity-60"
+            className="mt-8 rounded-xl bg-primary px-6 py-3 font-semibold text-primary-foreground transition hover:bg-primary-hover disabled:cursor-wait disabled:opacity-60"
             disabled={isSubmitting}
             type="submit"
           >

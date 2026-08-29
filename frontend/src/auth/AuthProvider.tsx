@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   getCurrentUser,
@@ -12,11 +12,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const initialSessionRequest = useRef<Promise<AuthUser | null> | null>(null);
 
   useEffect(() => {
     let isActive = true;
+    const sessionRequest = initialSessionRequest.current ?? getCurrentUser();
+    initialSessionRequest.current = sessionRequest;
 
-    void getCurrentUser()
+    void sessionRequest
       .then((currentUser) => {
         if (isActive) {
           setUser(currentUser);
@@ -45,14 +48,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return response.user;
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    const currentUser = await getCurrentUser();
+    setUser(currentUser);
+    setSessionError(null);
+    return currentUser;
+  }, []);
+
   const logout = useCallback(async () => {
     await logoutUser();
     setUser(null);
   }, []);
 
   const value = useMemo(
-    () => ({ user, isLoading, sessionError, login, logout }),
-    [user, isLoading, sessionError, login, logout],
+    () => ({ user, isLoading, sessionError, login, refreshUser, logout }),
+    [user, isLoading, sessionError, login, refreshUser, logout],
   );
 
   return <AuthContext value={value}>{children}</AuthContext>;

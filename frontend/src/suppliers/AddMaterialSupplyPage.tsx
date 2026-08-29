@@ -23,11 +23,11 @@ import {
 } from "./materialSupplyForm";
 
 const inputClassName =
-  "mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 aria-invalid:border-rose-500";
+  "mt-2 w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 aria-invalid:border-danger-border";
 
 function FieldError({ id, message }: { id: string; message?: string }) {
   return message ? (
-    <span className="mt-2 block text-sm text-rose-300" id={id}>
+    <span className="mt-2 block text-sm text-danger" id={id}>
       {message}
     </span>
   ) : null;
@@ -140,14 +140,14 @@ export function AddMaterialSupplyPage() {
         <ErrorState
           action={profileRequired ? (
             <Link
-              className="rounded-full bg-teal-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-teal-200"
+              className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover"
               to={supplierProfilePagePath}
             >
               Create supplier profile
             </Link>
           ) : (
             <button
-              className="rounded-full bg-teal-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-teal-200"
+              className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover"
               onClick={retryLoad}
               type="button"
             >
@@ -166,58 +166,58 @@ export function AddMaterialSupplyPage() {
   if (savedSupply) {
     return (
       <section className="px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
-        <div className="mx-auto max-w-4xl rounded-3xl border border-emerald-800/70 bg-emerald-950/30 p-7 sm:p-10">
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-300">
+        <div className="mx-auto max-w-4xl rounded-3xl border border-success-border bg-success-soft p-7 sm:p-10">
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-success">
             Material supply saved
           </p>
-          <h1 className="mt-3 text-3xl font-bold text-white">{savedSupply.materialName}</h1>
-          <p aria-live="polite" className="mt-3 text-emerald-100">
+          <h1 className="mt-3 text-3xl font-bold text-foreground">{savedSupply.materialName}</h1>
+          <p aria-live="polite" className="mt-3 text-success">
             Material supply created successfully under {supplier?.businessName}.
           </p>
-          <dl className="mt-8 grid gap-4 rounded-2xl border border-emerald-900 bg-slate-950/60 p-5 sm:grid-cols-2">
+          <dl className="mt-8 grid gap-4 rounded-2xl border border-success-border bg-background/60 p-5 sm:grid-cols-2">
             <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Supply ID</dt>
-              <dd className="mt-1 font-semibold text-white">{savedSupply.id}</dd>
+              <dt className="text-xs uppercase tracking-wide text-muted">Supply ID</dt>
+              <dd className="mt-1 font-semibold text-foreground">{savedSupply.id}</dd>
             </div>
             <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Supplier ID</dt>
-              <dd className="mt-1 font-semibold text-white">{savedSupply.supplierId}</dd>
+              <dt className="text-xs uppercase tracking-wide text-muted">Supplier ID</dt>
+              <dd className="mt-1 font-semibold text-foreground">{savedSupply.supplierId}</dd>
             </div>
             <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Material code</dt>
-              <dd className="mt-1 font-semibold text-white">{savedSupply.materialCode}</dd>
+              <dt className="text-xs uppercase tracking-wide text-muted">Material code</dt>
+              <dd className="mt-1 font-semibold text-foreground">{savedSupply.materialCode}</dd>
             </div>
             <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Quantity</dt>
-              <dd className="mt-1 font-semibold text-white">
+              <dt className="text-xs uppercase tracking-wide text-muted">Quantity</dt>
+              <dd className="mt-1 font-semibold text-foreground">
                 {savedSupply.quantity} {savedSupply.unitOfMeasure}
               </dd>
             </div>
             <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Unit price</dt>
-              <dd className="mt-1 font-semibold text-white">{savedSupply.unitPrice}</dd>
+              <dt className="text-xs uppercase tracking-wide text-muted">Unit price</dt>
+              <dd className="mt-1 font-semibold text-foreground">{savedSupply.unitPrice}</dd>
             </div>
             <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Delivery lead time</dt>
-              <dd className="mt-1 font-semibold text-white">
+              <dt className="text-xs uppercase tracking-wide text-muted">Delivery lead time</dt>
+              <dd className="mt-1 font-semibold text-foreground">
                 {savedSupply.deliveryLeadTimeDays} days
               </dd>
             </div>
             <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Description</dt>
-              <dd className="mt-1 text-slate-200">
+              <dt className="text-xs uppercase tracking-wide text-muted">Description</dt>
+              <dd className="mt-1 text-foreground">
                 {optionalValue(savedSupply.materialDescription)}
               </dd>
             </div>
             <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Delivery notes</dt>
-              <dd className="mt-1 text-slate-200">
+              <dt className="text-xs uppercase tracking-wide text-muted">Delivery notes</dt>
+              <dd className="mt-1 text-foreground">
                 {optionalValue(savedSupply.deliveryNotes)}
               </dd>
             </div>
           </dl>
           <button
-            className="mt-8 rounded-xl bg-teal-400 px-5 py-3 font-semibold text-slate-950 transition hover:bg-teal-300"
+            className="mt-8 rounded-xl bg-primary px-5 py-3 font-semibold text-primary-foreground transition hover:bg-primary-hover"
             onClick={resetForm}
             type="button"
           >
@@ -231,35 +231,35 @@ export function AddMaterialSupplyPage() {
   return (
     <section className="px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
       <div className="mx-auto max-w-4xl">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-teal-300">
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">
           Supplier Management
         </p>
-        <h1 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+        <h1 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
           Add material supply
         </h1>
-        <p className="mt-3 max-w-2xl leading-7 text-slate-400">
+        <p className="mt-3 max-w-2xl leading-7 text-muted">
           Record a material your business can provide. The server links it to your
           authenticated supplier profile and creates it as active.
         </p>
 
-        <dl className="mt-6 grid gap-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-5 sm:grid-cols-2">
+        <dl className="mt-6 grid gap-4 rounded-2xl border border-border bg-surface/60 p-5 sm:grid-cols-2">
           <div>
-            <dt className="text-xs uppercase tracking-wide text-slate-500">Supplier</dt>
-            <dd className="mt-1 font-medium text-slate-100">{supplier?.businessName}</dd>
+            <dt className="text-xs uppercase tracking-wide text-muted">Supplier</dt>
+            <dd className="mt-1 font-medium text-foreground">{supplier?.businessName}</dd>
           </div>
           <div>
-            <dt className="text-xs uppercase tracking-wide text-slate-500">Supplier ID</dt>
-            <dd className="mt-1 font-medium text-slate-100">{supplier?.id}</dd>
+            <dt className="text-xs uppercase tracking-wide text-muted">Supplier ID</dt>
+            <dd className="mt-1 font-medium text-foreground">{supplier?.id}</dd>
           </div>
         </dl>
 
         <form
-          className="mt-6 rounded-3xl border border-slate-800 bg-slate-900/70 p-6 sm:p-8"
+          className="mt-6 rounded-3xl border border-border bg-surface/70 p-6 sm:p-8"
           noValidate
           onSubmit={handleSubmit}
         >
           <div className="grid gap-6 sm:grid-cols-2">
-            <label className="block text-sm font-medium text-slate-200" htmlFor="supply-code">
+            <label className="block text-sm font-medium text-foreground" htmlFor="supply-code">
               Material code
               <input
                 aria-describedby={fieldErrors.materialCode ? "supply-code-error" : undefined}
@@ -274,7 +274,7 @@ export function AddMaterialSupplyPage() {
               <FieldError id="supply-code-error" message={fieldErrors.materialCode} />
             </label>
 
-            <label className="block text-sm font-medium text-slate-200" htmlFor="supply-name">
+            <label className="block text-sm font-medium text-foreground" htmlFor="supply-name">
               Material name
               <input
                 aria-describedby={fieldErrors.materialName ? "supply-name-error" : undefined}
@@ -289,7 +289,7 @@ export function AddMaterialSupplyPage() {
               <FieldError id="supply-name-error" message={fieldErrors.materialName} />
             </label>
 
-            <label className="block text-sm font-medium text-slate-200" htmlFor="supply-quantity">
+            <label className="block text-sm font-medium text-foreground" htmlFor="supply-quantity">
               Quantity
               <input
                 aria-label="Quantity"
@@ -302,13 +302,13 @@ export function AddMaterialSupplyPage() {
                 placeholder="0.000"
                 value={form.quantity}
               />
-              <span className="mt-2 block text-xs text-slate-500" id="supply-quantity-help">
+              <span className="mt-2 block text-xs text-muted" id="supply-quantity-help">
                 Positive amount with up to three decimal places.
               </span>
               <FieldError id="supply-quantity-error" message={fieldErrors.quantity} />
             </label>
 
-            <label className="block text-sm font-medium text-slate-200" htmlFor="supply-unit">
+            <label className="block text-sm font-medium text-foreground" htmlFor="supply-unit">
               Unit of measure
               <input
                 aria-describedby={fieldErrors.unitOfMeasure ? "supply-unit-error" : undefined}
@@ -324,7 +324,7 @@ export function AddMaterialSupplyPage() {
               <FieldError id="supply-unit-error" message={fieldErrors.unitOfMeasure} />
             </label>
 
-            <label className="block text-sm font-medium text-slate-200" htmlFor="supply-price">
+            <label className="block text-sm font-medium text-foreground" htmlFor="supply-price">
               Unit price
               <input
                 aria-label="Unit price"
@@ -337,13 +337,13 @@ export function AddMaterialSupplyPage() {
                 placeholder="0.00"
                 value={form.unitPrice}
               />
-              <span className="mt-2 block text-xs text-slate-500" id="supply-price-help">
+              <span className="mt-2 block text-xs text-muted" id="supply-price-help">
                 Positive amount with up to two decimal places.
               </span>
               <FieldError id="supply-price-error" message={fieldErrors.unitPrice} />
             </label>
 
-            <label className="block text-sm font-medium text-slate-200" htmlFor="supply-lead-time">
+            <label className="block text-sm font-medium text-foreground" htmlFor="supply-lead-time">
               Delivery lead time (days)
               <input
                 aria-describedby={fieldErrors.deliveryLeadTimeDays ? "supply-lead-time-error" : undefined}
@@ -362,7 +362,7 @@ export function AddMaterialSupplyPage() {
             </label>
           </div>
 
-          <label className="mt-6 block text-sm font-medium text-slate-200" htmlFor="supply-description">
+          <label className="mt-6 block text-sm font-medium text-foreground" htmlFor="supply-description">
             Material description (optional)
             <textarea
               aria-describedby={fieldErrors.materialDescription ? "supply-description-error" : undefined}
@@ -379,7 +379,7 @@ export function AddMaterialSupplyPage() {
             />
           </label>
 
-          <label className="mt-6 block text-sm font-medium text-slate-200" htmlFor="supply-delivery-notes">
+          <label className="mt-6 block text-sm font-medium text-foreground" htmlFor="supply-delivery-notes">
             Delivery notes (optional)
             <textarea
               aria-describedby={fieldErrors.deliveryNotes ? "supply-delivery-notes-error" : undefined}
@@ -395,7 +395,7 @@ export function AddMaterialSupplyPage() {
 
           {submissionError ? (
             <p
-              className="mt-6 rounded-xl border border-rose-900 bg-rose-950/60 p-4 text-sm text-rose-200"
+              className="mt-6 rounded-xl border border-danger-border bg-danger-soft p-4 text-sm text-danger"
               role="alert"
             >
               {submissionError}
@@ -403,7 +403,7 @@ export function AddMaterialSupplyPage() {
           ) : null}
 
           <button
-            className="mt-8 rounded-xl bg-teal-400 px-6 py-3 font-semibold text-slate-950 transition hover:bg-teal-300 disabled:cursor-wait disabled:opacity-60"
+            className="mt-8 rounded-xl bg-primary px-6 py-3 font-semibold text-primary-foreground transition hover:bg-primary-hover disabled:cursor-wait disabled:opacity-60"
             disabled={isSubmitting}
             type="submit"
           >

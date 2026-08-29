@@ -22,7 +22,7 @@ import {
 } from "./materialSupplyForm";
 
 const inputClassName =
-  "mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 aria-invalid:border-rose-500";
+  "mt-2 w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 aria-invalid:border-danger-border";
 
 function formFromSupply(supply: MaterialSupply): UpdateMaterialSupplyInput {
   return {
@@ -35,7 +35,7 @@ function formFromSupply(supply: MaterialSupply): UpdateMaterialSupplyInput {
 
 function FieldError({ id, message }: { id: string; message?: string }) {
   return message ? (
-    <span className="mt-2 block text-sm text-rose-300" id={id}>
+    <span className="mt-2 block text-sm text-danger" id={id}>
       {message}
     </span>
   ) : null;
@@ -47,7 +47,7 @@ function SupplyNotFoundState() {
       <EmptyState
         action={(
           <Link
-            className="rounded-full border border-slate-700 px-5 py-2.5 text-sm font-semibold text-slate-200 transition hover:border-teal-400 hover:text-white"
+            className="rounded-full border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition hover:border-primary hover:text-foreground"
             to={materialSupplyListPagePath}
           >
             Back to my supplies
@@ -69,31 +69,31 @@ function ArchivedSupplyState({
 }) {
   return (
     <section className="px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
-      <div className="mx-auto max-w-4xl rounded-3xl border border-amber-800/70 bg-amber-950/30 p-7 sm:p-10">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-300">
+      <div className="mx-auto max-w-4xl rounded-3xl border border-warning-border bg-warning-soft p-7 sm:p-10">
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-warning">
           Supply lifecycle
         </p>
-        <h1 className="mt-3 text-3xl font-bold text-white">Material supply archived</h1>
-        <p aria-live="polite" className="mt-3 leading-7 text-amber-100">
+        <h1 className="mt-3 text-3xl font-bold text-foreground">Material supply archived</h1>
+        <p aria-live="polite" className="mt-3 leading-7 text-warning">
           {message ?? "This material supply was previously archived."} Its stable ID and
           complete record remain available for Inventory and historical references.
         </p>
-        <dl className="mt-7 grid gap-4 rounded-2xl border border-amber-900 bg-slate-950/60 p-5 sm:grid-cols-3">
+        <dl className="mt-7 grid gap-4 rounded-2xl border border-warning-border bg-background/60 p-5 sm:grid-cols-3">
           <div>
-            <dt className="text-xs uppercase tracking-wide text-slate-500">Supply ID</dt>
-            <dd className="mt-1 font-semibold text-white">{supply.id}</dd>
+            <dt className="text-xs uppercase tracking-wide text-muted">Supply ID</dt>
+            <dd className="mt-1 font-semibold text-foreground">{supply.id}</dd>
           </div>
           <div>
-            <dt className="text-xs uppercase tracking-wide text-slate-500">Material</dt>
-            <dd className="mt-1 font-semibold text-white">{supply.materialName}</dd>
+            <dt className="text-xs uppercase tracking-wide text-muted">Material</dt>
+            <dd className="mt-1 font-semibold text-foreground">{supply.materialName}</dd>
           </div>
           <div>
-            <dt className="text-xs uppercase tracking-wide text-slate-500">Status</dt>
-            <dd className="mt-1 font-semibold text-amber-300">Discontinued</dd>
+            <dt className="text-xs uppercase tracking-wide text-muted">Status</dt>
+            <dd className="mt-1 font-semibold text-warning">Discontinued</dd>
           </div>
         </dl>
         <Link
-          className="mt-7 inline-flex rounded-full border border-amber-700 px-5 py-2.5 text-sm font-semibold text-amber-100 transition hover:border-amber-400"
+          className="mt-7 inline-flex rounded-full border border-warning-border px-5 py-2.5 text-sm font-semibold text-warning transition hover:border-warning-border"
           to={materialSupplyListPagePath}
         >
           Back to my supplies
@@ -228,7 +228,7 @@ function EditMaterialSupplyContent({ supplyId }: { supplyId: number }) {
         <ErrorState
           action={(
             <button
-              className="rounded-full bg-teal-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-teal-200"
+              className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover"
               onClick={retryLoad}
               type="button"
             >
@@ -248,39 +248,39 @@ function EditMaterialSupplyContent({ supplyId }: { supplyId: number }) {
   return (
     <section className="px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
       <div className="mx-auto max-w-4xl">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-teal-300">
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">
           Supplier Management
         </p>
-        <h1 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+        <h1 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
           Edit material supply
         </h1>
-        <p className="mt-3 leading-7 text-slate-400">
+        <p className="mt-3 leading-7 text-muted">
           Update future quantity, unit price, and delivery information. Material identity,
           ownership, unit, status, and stable ID remain unchanged.
         </p>
 
-        <dl className="mt-6 grid gap-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-5 sm:grid-cols-3">
+        <dl className="mt-6 grid gap-4 rounded-2xl border border-border bg-surface/60 p-5 sm:grid-cols-3">
           <div>
-            <dt className="text-xs uppercase tracking-wide text-slate-500">Material</dt>
-            <dd className="mt-1 font-semibold text-white">{supply.materialName}</dd>
+            <dt className="text-xs uppercase tracking-wide text-muted">Material</dt>
+            <dd className="mt-1 font-semibold text-foreground">{supply.materialName}</dd>
           </div>
           <div>
-            <dt className="text-xs uppercase tracking-wide text-slate-500">Code</dt>
-            <dd className="mt-1 font-semibold text-white">{supply.materialCode}</dd>
+            <dt className="text-xs uppercase tracking-wide text-muted">Code</dt>
+            <dd className="mt-1 font-semibold text-foreground">{supply.materialCode}</dd>
           </div>
           <div>
-            <dt className="text-xs uppercase tracking-wide text-slate-500">Unit</dt>
-            <dd className="mt-1 font-semibold text-white">{supply.unitOfMeasure}</dd>
+            <dt className="text-xs uppercase tracking-wide text-muted">Unit</dt>
+            <dd className="mt-1 font-semibold text-foreground">{supply.unitOfMeasure}</dd>
           </div>
         </dl>
 
         <form
-          className="mt-6 rounded-3xl border border-slate-800 bg-slate-900/70 p-6 sm:p-8"
+          className="mt-6 rounded-3xl border border-border bg-surface/70 p-6 sm:p-8"
           noValidate
           onSubmit={handleSubmit}
         >
           <div className="grid gap-6 sm:grid-cols-2">
-            <label className="text-sm font-medium text-slate-200" htmlFor="edit-supply-quantity">
+            <label className="text-sm font-medium text-foreground" htmlFor="edit-supply-quantity">
               Quantity ({supply.unitOfMeasure})
               <input
                 aria-describedby={fieldErrors.quantity ? "edit-supply-quantity-error" : undefined}
@@ -294,7 +294,7 @@ function EditMaterialSupplyContent({ supplyId }: { supplyId: number }) {
               />
               <FieldError id="edit-supply-quantity-error" message={fieldErrors.quantity} />
             </label>
-            <label className="text-sm font-medium text-slate-200" htmlFor="edit-supply-price">
+            <label className="text-sm font-medium text-foreground" htmlFor="edit-supply-price">
               Unit price
               <input
                 aria-describedby={fieldErrors.unitPrice ? "edit-supply-price-error" : undefined}
@@ -307,7 +307,7 @@ function EditMaterialSupplyContent({ supplyId }: { supplyId: number }) {
               />
               <FieldError id="edit-supply-price-error" message={fieldErrors.unitPrice} />
             </label>
-            <label className="text-sm font-medium text-slate-200" htmlFor="edit-supply-days">
+            <label className="text-sm font-medium text-foreground" htmlFor="edit-supply-days">
               Delivery lead time (days)
               <input
                 aria-describedby={fieldErrors.deliveryLeadTimeDays ? "edit-supply-days-error" : undefined}
@@ -320,7 +320,7 @@ function EditMaterialSupplyContent({ supplyId }: { supplyId: number }) {
               />
               <FieldError id="edit-supply-days-error" message={fieldErrors.deliveryLeadTimeDays} />
             </label>
-            <label className="text-sm font-medium text-slate-200 sm:col-span-2" htmlFor="edit-supply-notes">
+            <label className="text-sm font-medium text-foreground sm:col-span-2" htmlFor="edit-supply-notes">
               Delivery notes (optional)
               <textarea
                 aria-describedby={fieldErrors.deliveryNotes ? "edit-supply-notes-error" : undefined}
@@ -336,26 +336,26 @@ function EditMaterialSupplyContent({ supplyId }: { supplyId: number }) {
           </div>
 
           {submissionError ? (
-            <p className="mt-6 rounded-xl border border-rose-800 bg-rose-950/50 p-4 text-sm text-rose-200" role="alert">
+            <p className="mt-6 rounded-xl border border-danger-border bg-danger-soft p-4 text-sm text-danger" role="alert">
               {submissionError}
             </p>
           ) : null}
           {successMessage ? (
-            <p aria-live="polite" className="mt-6 rounded-xl border border-emerald-800 bg-emerald-950/50 p-4 text-sm text-emerald-200">
+            <p aria-live="polite" className="mt-6 rounded-xl border border-success-border bg-success-soft p-4 text-sm text-success">
               {successMessage} Updated at {new Date(supply.updatedAt).toLocaleString()}.
             </p>
           ) : null}
 
           <div className="mt-7 flex flex-wrap gap-3">
             <button
-              className="rounded-xl bg-teal-400 px-5 py-3 font-semibold text-slate-950 transition hover:bg-teal-300 disabled:cursor-wait disabled:opacity-60"
+              className="rounded-xl bg-primary px-5 py-3 font-semibold text-primary-foreground transition hover:bg-primary-hover disabled:cursor-wait disabled:opacity-60"
               disabled={isSubmitting}
               type="submit"
             >
               {isSubmitting ? "Updating supply…" : "Update supply details"}
             </button>
             <Link
-              className="rounded-xl border border-slate-700 px-5 py-3 font-semibold text-slate-200 transition hover:border-slate-500 hover:text-white"
+              className="rounded-xl border border-border px-5 py-3 font-semibold text-foreground transition hover:border-border hover:text-foreground"
               to={materialSupplyListPagePath}
             >
               Back to my supplies
@@ -363,12 +363,12 @@ function EditMaterialSupplyContent({ supplyId }: { supplyId: number }) {
           </div>
         </form>
 
-        <section className="mt-8 rounded-3xl border border-rose-900/70 bg-rose-950/20 p-6 sm:p-8">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-rose-300">
+        <section className="mt-8 rounded-3xl border border-danger-border bg-danger-soft p-6 sm:p-8">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-danger">
             Supply lifecycle
           </p>
-          <h2 className="mt-2 text-2xl font-bold text-white">Archive this supply</h2>
-          <p className="mt-3 max-w-2xl leading-7 text-slate-300">
+          <h2 className="mt-2 text-2xl font-bold text-foreground">Archive this supply</h2>
+          <p className="mt-3 max-w-2xl leading-7 text-foreground-muted">
             Archiving removes this offer from active Inventory selection while retaining
             its stable ID and full record for historical references.
           </p>
@@ -377,22 +377,22 @@ function EditMaterialSupplyContent({ supplyId }: { supplyId: number }) {
             <div
               aria-describedby="archive-supply-description"
               aria-labelledby="archive-supply-title"
-              className="mt-6 rounded-2xl border border-rose-700 bg-slate-950/70 p-5"
+              className="mt-6 rounded-2xl border border-danger-border bg-background/70 p-5"
               role="alertdialog"
             >
-              <h3 className="text-lg font-bold text-white" id="archive-supply-title">
+              <h3 className="text-lg font-bold text-foreground" id="archive-supply-title">
                 Confirm supply archive
               </h3>
-              <p className="mt-2 text-sm leading-6 text-slate-300" id="archive-supply-description">
+              <p className="mt-2 text-sm leading-6 text-foreground-muted" id="archive-supply-description">
                 Confirm that {supply.materialName} should no longer be offered for active
                 Inventory decisions. No database record or stable ID will be deleted.
               </p>
               {archiveError ? (
-                <p className="mt-4 text-sm text-rose-200" role="alert">{archiveError}</p>
+                <p className="mt-4 text-sm text-danger" role="alert">{archiveError}</p>
               ) : null}
               <div className="mt-5 flex flex-wrap gap-3">
                 <button
-                  className="rounded-xl bg-rose-500 px-5 py-3 font-semibold text-white transition hover:bg-rose-400 disabled:cursor-wait disabled:opacity-60"
+                  className="rounded-xl bg-danger px-5 py-3 font-semibold text-foreground transition hover:bg-danger disabled:cursor-wait disabled:opacity-60"
                   disabled={isArchiving}
                   onClick={() => void confirmArchive()}
                   type="button"
@@ -400,7 +400,7 @@ function EditMaterialSupplyContent({ supplyId }: { supplyId: number }) {
                   {isArchiving ? "Archiving supply…" : "Confirm archive"}
                 </button>
                 <button
-                  className="rounded-xl border border-slate-700 px-5 py-3 font-semibold text-slate-200 transition hover:border-slate-500 disabled:opacity-60"
+                  className="rounded-xl border border-border px-5 py-3 font-semibold text-foreground transition hover:border-border disabled:opacity-60"
                   disabled={isArchiving}
                   onClick={() => {
                     setIsConfirmingArchive(false);
@@ -414,7 +414,7 @@ function EditMaterialSupplyContent({ supplyId }: { supplyId: number }) {
             </div>
           ) : (
             <button
-              className="mt-6 rounded-xl border border-rose-700 px-5 py-3 font-semibold text-rose-200 transition hover:bg-rose-950"
+              className="mt-6 rounded-xl border border-danger-border px-5 py-3 font-semibold text-danger transition hover:bg-danger-soft"
               onClick={() => setIsConfirmingArchive(true)}
               type="button"
             >

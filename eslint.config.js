@@ -21,6 +21,10 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      // Page effects intentionally initiate abortable API requests and reset their
+      // loading/error state before the promise settles. This is synchronization
+      // with an external system, not derived React state.
+      "react-hooks/set-state-in-effect": "off",
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
     },
   },

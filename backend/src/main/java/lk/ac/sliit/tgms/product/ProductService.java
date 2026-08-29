@@ -1,6 +1,8 @@
 package lk.ac.sliit.tgms.product;
 
 import java.math.BigDecimal;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.text.Normalizer;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,12 +25,14 @@ public class ProductService {
     public GarmentProductDetails createProduct(
             String name,
             String categoryName,
+            String imageUrl,
             String size,
             String color,
             BigDecimal price,
             CreateProductAvailability availability) {
         String normalizedName = normalizeText(name);
         String normalizedCategory = normalizeText(categoryName);
+        String normalizedImageUrl = normalizeOptionalText(imageUrl);
         String normalizedSize = normalizeText(size);
         String normalizedColor = normalizeText(color);
         validate(
@@ -36,6 +40,7 @@ public class ProductService {
                 normalizedCategory,
                 normalizedSize,
                 normalizedColor,
+                normalizedImageUrl,
                 price,
                 availability);
 
@@ -44,7 +49,8 @@ public class ProductService {
             throw new InactiveProductCategoryException();
         }
 
-        long productId = productRepository.createProduct(category.id(), normalizedName);
+        long productId = productRepository.createProduct(
+                category.id(), normalizedName, normalizedImageUrl);
         productRepository.createVariant(
                 productId,
                 normalizedSize,
@@ -63,6 +69,7 @@ public class ProductService {
             long variantId,
             String name,
             String categoryName,
+            String imageUrl,
             String size,
             String color,
             BigDecimal price,
@@ -72,6 +79,7 @@ public class ProductService {
 
         String normalizedName = normalizeText(name);
         String normalizedCategory = normalizeText(categoryName);
+        String normalizedImageUrl = normalizeOptionalText(imageUrl);
         String normalizedSize = normalizeText(size);
         String normalizedColor = normalizeText(color);
         validate(
@@ -79,6 +87,7 @@ public class ProductService {
                 normalizedCategory,
                 normalizedSize,
                 normalizedColor,
+                normalizedImageUrl,
                 price,
                 availability);
 
@@ -101,7 +110,7 @@ public class ProductService {
 
         try {
             int updatedProducts = productRepository.updateProduct(
-                    productId, category.id(), normalizedName);
+                    productId, category.id(), normalizedName, normalizedImageUrl);
             int updatedVariants = productRepository.updateVariant(
                     productId,
                     variantId,
@@ -303,6 +312,7 @@ public class ProductService {
             String category,
             String size,
             String color,
+            String imageUrl,
             BigDecimal price,
             CreateProductAvailability availability) {
         Map<String, String> fields = new LinkedHashMap<>();
@@ -310,6 +320,7 @@ public class ProductService {
         validateText(fields, "category", category, 100, "Category");
         validateText(fields, "size", size, 32, "Size");
         validateText(fields, "color", color, 64, "Color");
+        validateImageUrl(fields, imageUrl);
 
         if (price == null
                 || price.compareTo(BigDecimal.ZERO) <= 0
@@ -323,6 +334,30 @@ public class ProductService {
         if (!fields.isEmpty()) {
             throw new ProductValidationException(fields);
         }
+    }
+
+    private void validateImageUrl(Map<String, String> fields, String imageUrl) {
+        if (imageUrl == null) {
+            return;
+        }
+        if (imageUrl.length() > 500) {
+            fields.put("imageUrl", "Product image URL must not exceed 500 characters.");
+            return;
+        }
+        if (imageUrl.startsWith("/products/") && !imageUrl.contains("..")) {
+            return;
+        }
+        try {
+            URI uri = new URI(imageUrl);
+            if ("https".equalsIgnoreCase(uri.getScheme()) && uri.getHost() != null) {
+                return;
+            }
+        } catch (URISyntaxException ignored) {
+            // Report one field-level validation error below.
+        }
+        fields.put(
+                "imageUrl",
+                "Use an HTTPS image URL or a local /products/ image path.");
     }
 
     private void validateText(

@@ -93,6 +93,11 @@ class AuthApiIntegrationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("customer@example.com"));
 
+        mockMvc.perform(get("/api/auth/session").cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.authenticated").value(true))
+                .andExpect(jsonPath("$.user.email").value("customer@example.com"));
+
         mockMvc.perform(post("/api/auth/logout").cookie(sessionCookie))
                 .andExpect(status().isOk())
                 .andExpect(header().string(
@@ -102,6 +107,11 @@ class AuthApiIntegrationTests {
         mockMvc.perform(get("/api/auth/me"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+
+        mockMvc.perform(get("/api/auth/session"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.authenticated").value(false))
+                .andExpect(jsonPath("$.user").isEmpty());
     }
 
     @Test

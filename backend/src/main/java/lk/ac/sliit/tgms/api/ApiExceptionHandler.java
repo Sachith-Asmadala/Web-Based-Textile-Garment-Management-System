@@ -2,16 +2,58 @@ package lk.ac.sliit.tgms.api;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import lk.ac.sliit.tgms.admin.AdminSelfAccessException;
+import lk.ac.sliit.tgms.admin.AdminUserNotFoundException;
+import lk.ac.sliit.tgms.admin.AdminUserValidationException;
+import lk.ac.sliit.tgms.admin.LastAdministratorException;
 import lk.ac.sliit.tgms.auth.EmailAlreadyRegisteredException;
 import lk.ac.sliit.tgms.auth.InvalidCredentialsException;
+import lk.ac.sliit.tgms.auth.InvalidPasswordResetException;
 import lk.ac.sliit.tgms.auth.InvalidSessionException;
 import lk.ac.sliit.tgms.auth.PasswordPolicyException;
+import lk.ac.sliit.tgms.delivery.DeliveryOrderAlreadyAssignedException;
+import lk.ac.sliit.tgms.delivery.DeliveryNotFoundException;
+import lk.ac.sliit.tgms.delivery.DeliveryOrderNotEligibleException;
+import lk.ac.sliit.tgms.delivery.DeliveryScheduleConflictException;
+import lk.ac.sliit.tgms.delivery.DeliveryStatusTransitionException;
+import lk.ac.sliit.tgms.delivery.DeliveryValidationException;
+import lk.ac.sliit.tgms.inventory.InventoryInsufficientStockException;
+import lk.ac.sliit.tgms.inventory.InventoryMaterialArchivedException;
+import lk.ac.sliit.tgms.inventory.InventoryMaterialUnavailableException;
 import lk.ac.sliit.tgms.inventory.InventoryMaterialCodeExistsException;
 import lk.ac.sliit.tgms.inventory.InventoryMaterialValidationException;
+import lk.ac.sliit.tgms.notification.NotificationNotFoundException;
+import lk.ac.sliit.tgms.notification.NotificationValidationException;
+import lk.ac.sliit.tgms.order.OrderBillingStateException;
+import lk.ac.sliit.tgms.order.OrderBillingValidationException;
+import lk.ac.sliit.tgms.order.OrderCancellationException;
+import lk.ac.sliit.tgms.order.OrderCustomerNotSelectableException;
+import lk.ac.sliit.tgms.order.OrderNotFoundException;
+import lk.ac.sliit.tgms.order.OrderReadValidationException;
+import lk.ac.sliit.tgms.order.OrderStatusTransitionException;
+import lk.ac.sliit.tgms.order.OrderStatusValidationException;
+import lk.ac.sliit.tgms.order.OrderProductNotSelectableException;
+import lk.ac.sliit.tgms.order.OrderValidationException;
+import lk.ac.sliit.tgms.quotation.QuotationCustomerNotSelectableException;
+import lk.ac.sliit.tgms.quotation.QuotationNotFoundException;
+import lk.ac.sliit.tgms.quotation.QuotationProductNotSelectableException;
+import lk.ac.sliit.tgms.quotation.QuotationValidationException;
 import lk.ac.sliit.tgms.product.InactiveProductCategoryException;
 import lk.ac.sliit.tgms.product.ProductNotFoundException;
 import lk.ac.sliit.tgms.product.ProductNotSelectableException;
 import lk.ac.sliit.tgms.product.ProductValidationException;
+import lk.ac.sliit.tgms.production.ProductionOrderNotEligibleException;
+import lk.ac.sliit.tgms.production.ProductionQualityControlException;
+import lk.ac.sliit.tgms.production.ProductionTaskStartException;
+import lk.ac.sliit.tgms.production.ProductionTaskStatusTransitionException;
+import lk.ac.sliit.tgms.production.ProductionTaskStatusValidationException;
+import lk.ac.sliit.tgms.production.ProductionMaterialShortageException;
+import lk.ac.sliit.tgms.production.ProductionTaskValidationException;
+import lk.ac.sliit.tgms.production.ProductionTaskNotFoundException;
+import lk.ac.sliit.tgms.production.ProductionTaskMaterialRequirementsLockedException;
+import lk.ac.sliit.tgms.production.ProductionTaskMaterialUsageException;
+import lk.ac.sliit.tgms.search.SharedSearchValidationException;
+import lk.ac.sliit.tgms.report.ReportValidationException;
 import lk.ac.sliit.tgms.supplier.MaterialSupplyCodeExistsException;
 import lk.ac.sliit.tgms.supplier.MaterialSupplyArchivedException;
 import lk.ac.sliit.tgms.supplier.MaterialSupplyNotFoundException;
@@ -29,6 +71,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -55,6 +99,35 @@ public class ApiExceptionHandler {
                 .body(ApiErrorResponse.of("INVALID_REQUEST", "Request body must be valid JSON."));
     }
 
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiErrorResponse> requestValueTypeMismatch(
+            MethodArgumentTypeMismatchException exception) {
+        String field = safeRequestField(exception.getName());
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.withFields(
+                        "VALIDATION_ERROR",
+                        "Please correct the highlighted fields.",
+                        Map.of(field, "Value must use the expected format.")));
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiErrorResponse> missingRequestParameter(
+            MissingServletRequestParameterException exception) {
+        String field = safeRequestField(exception.getParameterName());
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.withFields(
+                        "VALIDATION_ERROR",
+                        "Please correct the highlighted fields.",
+                        Map.of(field, "This parameter is required.")));
+    }
+
+    private String safeRequestField(String value) {
+        if (value == null || value.isBlank()) {
+            return "request";
+        }
+        return value.matches("[A-Za-z][A-Za-z0-9_.\\[\\]-]{0,63}") ? value : "request";
+    }
+
     @ExceptionHandler(PasswordPolicyException.class)
     public ResponseEntity<ApiErrorResponse> passwordPolicy(PasswordPolicyException exception) {
         return ResponseEntity.badRequest()
@@ -63,11 +136,47 @@ public class ApiExceptionHandler {
                         Map.of("password", exception.getMessage())));
     }
 
+    @ExceptionHandler(InvalidPasswordResetException.class)
+    public ResponseEntity<ApiErrorResponse> invalidPasswordReset(
+            InvalidPasswordResetException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.of("INVALID_PASSWORD_RESET", exception.getMessage()));
+    }
+
     @ExceptionHandler(EmailAlreadyRegisteredException.class)
     public ResponseEntity<ApiErrorResponse> emailConflict(
             EmailAlreadyRegisteredException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiErrorResponse.of("EMAIL_ALREADY_REGISTERED", exception.getMessage()));
+    }
+
+    @ExceptionHandler(AdminUserValidationException.class)
+    public ResponseEntity<ApiErrorResponse> adminUserValidation(
+            AdminUserValidationException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.withFields(
+                        "VALIDATION_ERROR", exception.getMessage(), exception.fields()));
+    }
+
+    @ExceptionHandler(AdminUserNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> adminUserNotFound(
+            AdminUserNotFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiErrorResponse.of("USER_NOT_FOUND", exception.getMessage()));
+    }
+
+    @ExceptionHandler(AdminSelfAccessException.class)
+    public ResponseEntity<ApiErrorResponse> adminSelfAccess(
+            AdminSelfAccessException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.of("ADMIN_SELF_ACCESS_REQUIRED", exception.getMessage()));
+    }
+
+    @ExceptionHandler(LastAdministratorException.class)
+    public ResponseEntity<ApiErrorResponse> lastAdministrator(
+            LastAdministratorException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.of("LAST_ADMINISTRATOR_REQUIRED", exception.getMessage()));
     }
 
     @ExceptionHandler(ProductValidationException.class)
@@ -161,6 +270,319 @@ public class ApiExceptionHandler {
                         "INVENTORY_MATERIAL_CODE_EXISTS",
                         exception.getMessage(),
                         Map.of("materialCode", exception.getMessage())));
+    }
+
+    @ExceptionHandler(InventoryInsufficientStockException.class)
+    public ResponseEntity<ApiErrorResponse> inventoryInsufficientStock(
+            InventoryInsufficientStockException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.withFields(
+                        "INSUFFICIENT_STOCK",
+                        exception.getMessage(),
+                        Map.of("quantity", exception.getMessage())));
+    }
+
+    @ExceptionHandler(InventoryMaterialArchivedException.class)
+    public ResponseEntity<ApiErrorResponse> inventoryMaterialArchived(
+            InventoryMaterialArchivedException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.of("INVENTORY_MATERIAL_ARCHIVED", exception.getMessage()));
+    }
+
+    @ExceptionHandler(InventoryMaterialUnavailableException.class)
+    public ResponseEntity<ApiErrorResponse> inventoryMaterialUnavailable(
+            InventoryMaterialUnavailableException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.of("INVENTORY_MATERIAL_NOT_ACTIVE", exception.getMessage()));
+    }
+
+
+
+    @ExceptionHandler(ReportValidationException.class)
+    public ResponseEntity<ApiErrorResponse> reportValidation(
+            ReportValidationException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.withFields(
+                        "VALIDATION_ERROR", exception.getMessage(), exception.fields()));
+    }
+
+    @ExceptionHandler(SharedSearchValidationException.class)
+    public ResponseEntity<ApiErrorResponse> sharedSearchValidation(
+            SharedSearchValidationException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.withFields(
+                        "VALIDATION_ERROR", exception.getMessage(), exception.fields()));
+    }
+
+    @ExceptionHandler(NotificationValidationException.class)
+    public ResponseEntity<ApiErrorResponse> notificationValidation(
+            NotificationValidationException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.withFields(
+                        "VALIDATION_ERROR", exception.getMessage(), exception.fields()));
+    }
+
+    @ExceptionHandler(NotificationNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> notificationNotFound(
+            NotificationNotFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiErrorResponse.of("NOTIFICATION_NOT_FOUND", exception.getMessage()));
+    }
+
+    @ExceptionHandler(OrderReadValidationException.class)
+    public ResponseEntity<ApiErrorResponse> orderReadValidation(
+            OrderReadValidationException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.withFields(
+                        "VALIDATION_ERROR", exception.getMessage(), exception.fields()));
+    }
+
+    @ExceptionHandler(OrderBillingValidationException.class)
+    public ResponseEntity<ApiErrorResponse> orderBillingValidation(
+            OrderBillingValidationException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.withFields(
+                        "VALIDATION_ERROR", exception.getMessage(), exception.fields()));
+    }
+
+    @ExceptionHandler(OrderBillingStateException.class)
+    public ResponseEntity<ApiErrorResponse> orderBillingState(
+            OrderBillingStateException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.of(exception.code(), exception.getMessage()));
+    }
+
+    @ExceptionHandler(OrderCancellationException.class)
+    public ResponseEntity<ApiErrorResponse> orderCancellation(OrderCancellationException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.withFields(
+                        "ORDER_CANCELLATION_BLOCKED",
+                        exception.getMessage(),
+                        Map.of("status", exception.getMessage())));
+    }
+
+    @ExceptionHandler(OrderStatusValidationException.class)
+    public ResponseEntity<ApiErrorResponse> orderStatusValidation(
+            OrderStatusValidationException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.withFields(
+                        "VALIDATION_ERROR", exception.getMessage(), exception.fields()));
+    }
+
+    @ExceptionHandler(OrderStatusTransitionException.class)
+    public ResponseEntity<ApiErrorResponse> orderStatusTransition(
+            OrderStatusTransitionException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.withFields(
+                        "ORDER_STATUS_TRANSITION_NOT_ALLOWED",
+                        exception.getMessage(),
+                        exception.fields()));
+    }
+
+    @ExceptionHandler(OrderNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> orderNotFound(OrderNotFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiErrorResponse.of("ORDER_NOT_FOUND", exception.getMessage()));
+    }
+
+    @ExceptionHandler(OrderValidationException.class)
+    public ResponseEntity<ApiErrorResponse> orderValidation(OrderValidationException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.withFields(
+                        "VALIDATION_ERROR", exception.getMessage(), exception.fields()));
+    }
+
+    @ExceptionHandler(OrderCustomerNotSelectableException.class)
+    public ResponseEntity<ApiErrorResponse> orderCustomerNotSelectable(
+            OrderCustomerNotSelectableException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.withFields(
+                        "CUSTOMER_NOT_SELECTABLE",
+                        exception.getMessage(),
+                        exception.fields()));
+    }
+
+    @ExceptionHandler(OrderProductNotSelectableException.class)
+    public ResponseEntity<ApiErrorResponse> orderProductNotSelectable(
+            OrderProductNotSelectableException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.withFields(
+                        "PRODUCT_NOT_SELECTABLE",
+                        exception.getMessage(),
+                        exception.fields()));
+    }
+
+
+    @ExceptionHandler(DeliveryNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> deliveryNotFound(DeliveryNotFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiErrorResponse.of("DELIVERY_NOT_FOUND", exception.getMessage()));
+    }
+
+    @ExceptionHandler(DeliveryStatusTransitionException.class)
+    public ResponseEntity<ApiErrorResponse> deliveryStatusTransition(
+            DeliveryStatusTransitionException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.withFields(
+                        "DELIVERY_STATUS_TRANSITION_NOT_ALLOWED", exception.getMessage(), exception.fields()));
+    }
+
+    @ExceptionHandler(DeliveryValidationException.class)
+    public ResponseEntity<ApiErrorResponse> deliveryValidation(DeliveryValidationException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.withFields(
+                        "VALIDATION_ERROR", exception.getMessage(), exception.fields()));
+    }
+
+    @ExceptionHandler(DeliveryOrderNotEligibleException.class)
+    public ResponseEntity<ApiErrorResponse> deliveryOrderNotEligible(
+            DeliveryOrderNotEligibleException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.withFields(
+                        "ORDER_NOT_READY_FOR_DELIVERY", exception.getMessage(), exception.fields()));
+    }
+
+    @ExceptionHandler(DeliveryOrderAlreadyAssignedException.class)
+    public ResponseEntity<ApiErrorResponse> deliveryOrderAlreadyAssigned(
+            DeliveryOrderAlreadyAssignedException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.withFields(
+                        "DELIVERY_ALREADY_EXISTS", exception.getMessage(), exception.fields()));
+    }
+
+    @ExceptionHandler(DeliveryScheduleConflictException.class)
+    public ResponseEntity<ApiErrorResponse> deliveryScheduleConflict(
+            DeliveryScheduleConflictException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.withFields(
+                        "DELIVERY_SCHEDULE_CONFLICT", exception.getMessage(), exception.fields()));
+    }
+
+    @ExceptionHandler(ProductionTaskValidationException.class)
+    public ResponseEntity<ApiErrorResponse> productionTaskValidation(
+            ProductionTaskValidationException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.withFields(
+                        "VALIDATION_ERROR", exception.getMessage(), exception.fields()));
+    }
+
+    @ExceptionHandler(ProductionOrderNotEligibleException.class)
+    public ResponseEntity<ApiErrorResponse> productionOrderNotEligible(
+            ProductionOrderNotEligibleException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.withFields(
+                        "ORDER_NOT_READY_FOR_PRODUCTION",
+                        exception.getMessage(),
+                        exception.fields()));
+    }
+
+    @ExceptionHandler(ProductionTaskNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> productionTaskNotFound(
+            ProductionTaskNotFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiErrorResponse.of("PRODUCTION_TASK_NOT_FOUND", exception.getMessage()));
+    }
+
+    @ExceptionHandler(ProductionMaterialShortageException.class)
+    public ResponseEntity<ApiErrorResponse> productionMaterialShortage(
+            ProductionMaterialShortageException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.withFields(
+                        "PRODUCTION_MATERIAL_SHORTAGE",
+                        exception.getMessage(),
+                        exception.fields()));
+    }
+
+    @ExceptionHandler(ProductionTaskStartException.class)
+    public ResponseEntity<ApiErrorResponse> productionTaskStartBlocked(
+            ProductionTaskStartException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.withFields(
+                        "PRODUCTION_TASK_START_NOT_ALLOWED",
+                        exception.getMessage(),
+                        exception.fields()));
+    }
+
+    @ExceptionHandler(ProductionTaskMaterialUsageException.class)
+    public ResponseEntity<ApiErrorResponse> productionMaterialUsageBlocked(
+            ProductionTaskMaterialUsageException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.withFields(
+                        "PRODUCTION_MATERIAL_USAGE_NOT_ALLOWED",
+                        exception.getMessage(),
+                        exception.fields()));
+    }
+
+    @ExceptionHandler(ProductionQualityControlException.class)
+    public ResponseEntity<ApiErrorResponse> productionQualityControl(
+            ProductionQualityControlException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.withFields(
+                        "PRODUCTION_QUALITY_CONTROL_NOT_ALLOWED",
+                        exception.getMessage(),
+                        exception.fields()));
+    }
+
+    @ExceptionHandler(ProductionTaskStatusValidationException.class)
+    public ResponseEntity<ApiErrorResponse> productionTaskStatusValidation(
+            ProductionTaskStatusValidationException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.withFields(
+                        "VALIDATION_ERROR", exception.getMessage(), exception.fields()));
+    }
+
+    @ExceptionHandler(ProductionTaskStatusTransitionException.class)
+    public ResponseEntity<ApiErrorResponse> productionTaskStatusTransition(
+            ProductionTaskStatusTransitionException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.withFields(
+                        "PRODUCTION_STATUS_TRANSITION_NOT_ALLOWED",
+                        exception.getMessage(),
+                        exception.fields()));
+    }
+
+    @ExceptionHandler(ProductionTaskMaterialRequirementsLockedException.class)
+    public ResponseEntity<ApiErrorResponse> productionMaterialRequirementsLocked(
+            ProductionTaskMaterialRequirementsLockedException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.withFields(
+                        "PRODUCTION_MATERIAL_REQUIREMENTS_LOCKED",
+                        exception.getMessage(),
+                        exception.fields()));
+    }
+
+    @ExceptionHandler(QuotationValidationException.class)
+    public ResponseEntity<ApiErrorResponse> quotationValidation(
+            QuotationValidationException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.withFields(
+                        "VALIDATION_ERROR", exception.getMessage(), exception.fields()));
+    }
+
+    @ExceptionHandler(QuotationCustomerNotSelectableException.class)
+    public ResponseEntity<ApiErrorResponse> quotationCustomerNotSelectable(
+            QuotationCustomerNotSelectableException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.withFields(
+                        "CUSTOMER_NOT_SELECTABLE",
+                        exception.getMessage(),
+                        exception.fields()));
+    }
+
+    @ExceptionHandler(QuotationProductNotSelectableException.class)
+    public ResponseEntity<ApiErrorResponse> quotationProductNotSelectable(
+            QuotationProductNotSelectableException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.withFields(
+                        "PRODUCT_NOT_SELECTABLE",
+                        exception.getMessage(),
+                        exception.fields()));
+    }
+
+    @ExceptionHandler(QuotationNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> quotationNotFound(QuotationNotFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiErrorResponse.of("QUOTATION_NOT_FOUND", exception.getMessage()));
     }
 
     @ExceptionHandler({InvalidCredentialsException.class, InvalidSessionException.class})

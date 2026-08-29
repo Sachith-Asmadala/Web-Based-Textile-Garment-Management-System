@@ -22,14 +22,17 @@ public class AuthController {
     private final AuthService authService;
     private final AuthTokenService authTokenService;
     private final AuthCookieService authCookieService;
+    private final PasswordResetService passwordResetService;
 
     public AuthController(
             AuthService authService,
             AuthTokenService authTokenService,
-            AuthCookieService authCookieService) {
+            AuthCookieService authCookieService,
+            PasswordResetService passwordResetService) {
         this.authService = authService;
         this.authTokenService = authTokenService;
         this.authCookieService = authCookieService;
+        this.passwordResetService = passwordResetService;
     }
 
     @PostMapping("/register")
@@ -56,8 +59,41 @@ public class AuthController {
                 .body(new MessageResponse("Logged out successfully."));
     }
 
+    @PostMapping("/password-reset/request")
+    public ResponseEntity<MessageResponse> requestPasswordReset(
+            @Valid @RequestBody PasswordResetRequest request) {
+        try {
+            passwordResetService.requestReset(request.email());
+        } catch (PasswordResetRequestProcessingException ignored) {
+            // Deliberately preserve the same public response when reset issuance/delivery fails.
+        }
+        return ResponseEntity.accepted()
+                .body(new MessageResponse(
+                        "If an active account matches that email, a password reset link will be sent."));
+    }
+
+    @PostMapping("/password-reset/confirm")
+    public ResponseEntity<MessageResponse> confirmPasswordReset(
+            @Valid @RequestBody PasswordResetConfirmation request) {
+        passwordResetService.resetPassword(request.token(), request.password());
+        return ResponseEntity.ok(new MessageResponse(
+                "Password updated successfully. You can now sign in with your new password."));
+    }
+
     @GetMapping("/me")
     public UserResponse currentUser(@AuthenticationPrincipal Jwt jwt) {
+        return authenticatedUser(jwt);
+    }
+
+    @GetMapping("/session")
+    public SessionResponse session(@AuthenticationPrincipal Jwt jwt) {
+        if (jwt == null) {
+            return new SessionResponse(false, null);
+        }
+        return new SessionResponse(true, authenticatedUser(jwt));
+    }
+
+    private UserResponse authenticatedUser(Jwt jwt) {
         long userId;
         try {
             userId = Long.parseLong(jwt.getSubject());
@@ -88,7 +124,23 @@ public class AuthController {
                     @Size(max = 72, message = "Password must not exceed 72 characters.")
                     String password) {}
 
+    public record PasswordResetRequest(
+            @NotBlank(message = "Email is required.")
+                    @Email(message = "Enter a valid email address.")
+                    @Size(max = 254, message = "Email must not exceed 254 characters.")
+                    String email) {}
+
+    public record PasswordResetConfirmation(
+            @NotBlank(message = "Reset token is required.")
+                    @Size(max = 512, message = "Reset token is invalid.")
+                    String token,
+            @NotBlank(message = "Password is required.")
+                    @Size(min = 8, max = 72, message = "Password must contain 8 to 72 characters.")
+                    String password) {}
+
     public record AuthResponse(String message, UserResponse user) {}
+
+    public record SessionResponse(boolean authenticated, UserResponse user) {}
 
     public record MessageResponse(String message) {}
 

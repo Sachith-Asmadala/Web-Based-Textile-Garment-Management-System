@@ -63,6 +63,7 @@ class ProductApiIntegrationTests {
                                 {
                                   "name": "  Classic   Crew Neck  ",
                                   "category": "  T-Shirts  ",
+                                  "imageUrl": " /products/demo/colombo-classic-polo.jpg ",
                                   "size": " M ",
                                   "color": " Navy Blue ",
                                   "price": "2499.90",
@@ -75,6 +76,8 @@ class ProductApiIntegrationTests {
                 .andExpect(jsonPath("$.message").value("Garment product created successfully."))
                 .andExpect(jsonPath("$.product.name").value("Classic Crew Neck"))
                 .andExpect(jsonPath("$.product.category.name").value("T-Shirts"))
+                .andExpect(jsonPath("$.product.imageUrl")
+                        .value("/products/demo/colombo-classic-polo.jpg"))
                 .andExpect(jsonPath("$.product.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.product.variants[0].size").value("M"))
                 .andExpect(jsonPath("$.product.variants[0].color").value("Navy Blue"))
@@ -95,6 +98,11 @@ class ProductApiIntegrationTests {
                         BigDecimal.class,
                         productId))
                 .isEqualByComparingTo("2499.90");
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT image_url FROM garment_products WHERE id = ?",
+                        String.class,
+                        productId))
+                .isEqualTo("/products/demo/colombo-classic-polo.jpg");
 
         mockMvc.perform(get("/api/products/{productId}", productId)
                         .cookie(sessionFor(UserRole.SALES_OFFICER)))
@@ -102,6 +110,8 @@ class ProductApiIntegrationTests {
                 .andExpect(jsonPath("$.id").value(productId))
                 .andExpect(jsonPath("$.categoryId").isNumber())
                 .andExpect(jsonPath("$.name").value("Classic Crew Neck"))
+                .andExpect(jsonPath("$.imageUrl")
+                        .value("/products/demo/colombo-classic-polo.jpg"))
                 .andExpect(jsonPath("$.variants[0].price").value("2499.90"));
     }
 
@@ -639,6 +649,7 @@ class ProductApiIntegrationTests {
                   "variantId": %d,
                   "name": "  Updated   Oxford Shirt  ",
                   "category": "%s",
+                  "imageUrl": "/products/demo/ceylon-batik-resort-shirt.jpg",
                   "size": " XL ",
                   "color": " Ivory ",
                   "price": "4290.50",

@@ -4,6 +4,7 @@ import { api } from "./client";
 
 export type InventoryMaterialType = "FABRIC" | "RAW_MATERIAL";
 export type InventoryMaterialStatus = "ACTIVE" | "INACTIVE" | "DISCONTINUED";
+export type InventoryStockState = "LOW_STOCK" | "SUFFICIENT";
 
 export interface InventoryMaterial {
   id: number;
@@ -16,6 +17,7 @@ export interface InventoryMaterial {
   currentQuantity: string;
   lowStockThreshold: string;
   status: InventoryMaterialStatus;
+  stockState: InventoryStockState;
   createdAt: string;
   updatedAt: string;
 }
@@ -36,8 +38,58 @@ export interface CreateInventoryMaterialResponse {
   material: InventoryMaterial;
 }
 
+export interface UpdateInventoryMaterialInput {
+  materialCode: string;
+  materialName: string;
+  materialDescription: string;
+  materialType: InventoryMaterialType;
+  unitOfMeasure: string;
+  lowStockThreshold: string;
+  status: Exclude<InventoryMaterialStatus, "DISCONTINUED">;
+}
+
+export interface UpdateInventoryMaterialResponse {
+  message: string;
+  material: InventoryMaterial;
+}
+
+export interface ArchiveInventoryMaterialResponse {
+  message: string;
+  material: InventoryMaterial;
+}
+
+export type InventoryAvailabilityState =
+  | "AVAILABLE"
+  | "INSUFFICIENT_STOCK"
+  | "NOT_ACTIVE";
+
+export interface InventoryMaterialAvailability {
+  materialId: number;
+  currentQuantity: string;
+  requiredQuantity: string;
+  status: InventoryMaterialStatus;
+  available: boolean;
+  availabilityState: InventoryAvailabilityState;
+}
+
+export interface ConsumeInventoryMaterialResponse {
+  message: string;
+  material: InventoryMaterial;
+}
+
 export interface InventoryMaterialListResponse {
   materials: InventoryMaterial[];
+}
+
+export interface LowStockInventoryMaterialListResponse {
+  count: number;
+  materials: InventoryMaterial[];
+}
+
+export interface InventoryMaterialListFilters {
+  search?: string;
+  status?: InventoryMaterialStatus;
+  materialType?: InventoryMaterialType;
 }
 
 interface InventoryMaterialApiErrorBody {
@@ -69,13 +121,76 @@ export async function createInventoryMaterial(
   return response.data;
 }
 
+export async function getInventoryMaterial(
+  materialId: number,
+  signal?: AbortSignal,
+): Promise<InventoryMaterial> {
+  const response = await api.get<InventoryMaterial>(`/inventory-materials/${materialId}`, { signal });
+  return response.data;
+}
+
+export async function updateInventoryMaterial(
+  materialId: number,
+  input: UpdateInventoryMaterialInput,
+): Promise<UpdateInventoryMaterialResponse> {
+  const response = await api.put<UpdateInventoryMaterialResponse>(
+    `/inventory-materials/${materialId}`,
+    input,
+  );
+  return response.data;
+}
+
+export async function archiveInventoryMaterial(
+  materialId: number,
+): Promise<ArchiveInventoryMaterialResponse> {
+  const response = await api.delete<ArchiveInventoryMaterialResponse>(
+    `/inventory-materials/${materialId}`,
+  );
+  return response.data;
+}
+
+export async function getInventoryMaterialAvailability(
+  materialId: number,
+  requiredQuantity: string,
+  signal?: AbortSignal,
+): Promise<InventoryMaterialAvailability> {
+  const response = await api.get<InventoryMaterialAvailability>(
+    `/inventory-materials/${materialId}/availability`,
+    { params: { requiredQuantity: requiredQuantity.trim() }, signal },
+  );
+  return response.data;
+}
+
+export async function consumeInventoryMaterial(
+  materialId: number,
+  quantity: string,
+): Promise<ConsumeInventoryMaterialResponse> {
+  const response = await api.post<ConsumeInventoryMaterialResponse>(
+    `/inventory-materials/${materialId}/consume`,
+    { quantity: quantity.trim() },
+  );
+  return response.data;
+}
+
 export async function getInventoryMaterials(
+  filters: InventoryMaterialListFilters = {},
   signal?: AbortSignal,
 ): Promise<InventoryMaterial[]> {
   const response = await api.get<InventoryMaterialListResponse>("/inventory-materials", {
+    params: filters,
     signal,
   });
   return response.data.materials;
+}
+
+export async function getLowStockInventoryMaterials(
+  signal?: AbortSignal,
+): Promise<LowStockInventoryMaterialListResponse> {
+  const response = await api.get<LowStockInventoryMaterialListResponse>(
+    "/inventory-materials/low-stock",
+    { signal },
+  );
+  return response.data;
 }
 
 export function getInventoryMaterialApiError(

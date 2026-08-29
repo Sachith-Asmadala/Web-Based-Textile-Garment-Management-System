@@ -11,6 +11,7 @@ export type CreateProductAvailability = "AVAILABLE" | "UNAVAILABLE";
 export interface CreateProductInput {
   name: string;
   category: string;
+  imageUrl?: string;
   size: string;
   color: string;
   price: string;

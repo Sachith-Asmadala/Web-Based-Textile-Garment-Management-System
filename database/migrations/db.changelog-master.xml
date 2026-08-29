@@ -5,10 +5,36 @@
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
         https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
 
-    <include file="changes/0000_baseline.sql" relativeToChangelogFile="true"/>
-    <include file="changes/20260822181000_create_users.sql" relativeToChangelogFile="true"/>
-    <include file="changes/20260823105000_create_garment_product_catalog.sql" relativeToChangelogFile="true"/>
-    <include file="changes/20260823120500_create_supplier_profiles.sql" relativeToChangelogFile="true"/>
-    <include file="changes/20260823123000_create_material_supplies.sql" relativeToChangelogFile="true"/>
-    <include file="changes/20260823134500_create_inventory_materials.sql" relativeToChangelogFile="true"/>
+    <!-- Foundation and shared identity -->
+    <include file="changes/baseline.sql" relativeToChangelogFile="true"/>
+    <include file="changes/create-users.sql" relativeToChangelogFile="true"/>
+
+    <!-- Catalog, suppliers, and inventory -->
+    <include file="changes/create-garment-product-catalog.sql" relativeToChangelogFile="true"/>
+    <include file="changes/add-garment-product-images.sql" relativeToChangelogFile="true"/>
+    <include file="changes/create-supplier-profiles.sql" relativeToChangelogFile="true"/>
+    <include file="changes/create-material-supplies.sql" relativeToChangelogFile="true"/>
+    <include file="changes/create-inventory-materials.sql" relativeToChangelogFile="true"/>
+
+    <!-- Orders, quotations, and billing -->
+    <include file="changes/create-customer-orders.sql" relativeToChangelogFile="true"/>
+    <include file="changes/create-order-items.sql" relativeToChangelogFile="true"/>
+    <include file="changes/create-order-status-history.sql" relativeToChangelogFile="true"/>
+    <include file="changes/create-customer-quotations.sql" relativeToChangelogFile="true"/>
+    <include file="changes/create-order-billing.sql" relativeToChangelogFile="true"/>
+
+    <!-- Production -->
+    <include file="changes/create-production-tasks.sql" relativeToChangelogFile="true"/>
+    <include file="changes/create-production-task-details.sql" relativeToChangelogFile="true"/>
+    <include file="changes/create-production-task-material-requirements.sql" relativeToChangelogFile="true"/>
+    <include file="changes/create-production-task-material-usage.sql" relativeToChangelogFile="true"/>
+    <include file="changes/add-production-quality-control.sql" relativeToChangelogFile="true"/>
+
+    <!-- Delivery -->
+    <include file="changes/create-deliveries.sql" relativeToChangelogFile="true"/>
+    <include file="changes/enable-safe-delivery-cancellation.xml" relativeToChangelogFile="true"/>
+
+    <!-- Authentication support and operational communication -->
+    <include file="changes/create-password-reset-tokens.sql" relativeToChangelogFile="true"/>
+    <include file="changes/create-notifications.sql" relativeToChangelogFile="true"/>
 </databaseChangeLog>

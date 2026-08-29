@@ -1,7 +1,8 @@
 package lk.ac.sliit.tgms.auth;
 
 import java.sql.PreparedStatement;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -48,6 +49,35 @@ public class JdbcUserAccountRepository implements UserAccountRepository {
     }
 
     @Override
+    public Optional<UserAccountSecurityState> findSecurityStateById(long id) {
+        return jdbcTemplate.query(
+                        "SELECT id, role, is_active FROM users WHERE id = ?",
+                        (resultSet, rowNumber) -> new UserAccountSecurityState(
+                                resultSet.getLong("id"),
+                                UserRole.valueOf(resultSet.getString("role")),
+                                resultSet.getBoolean("is_active")),
+                        id)
+                .stream()
+                .findFirst();
+    }
+
+    @Override
+    public List<UserAccount> findActiveByRole(UserRole role, String search) {
+        StringBuilder sql = new StringBuilder(
+                SELECT_ACCOUNT + " WHERE role = ? AND is_active = TRUE");
+        List<Object> parameters = new ArrayList<>();
+        parameters.add(role.name());
+        if (search != null) {
+            sql.append(" AND (LOCATE(LOWER(?), LOWER(full_name)) > 0 "
+                    + "OR LOCATE(LOWER(?), LOWER(email)) > 0)");
+            parameters.add(search);
+            parameters.add(search);
+        }
+        sql.append(" ORDER BY full_name, id");
+        return jdbcTemplate.query(sql.toString(), ACCOUNT_MAPPER, parameters.toArray());
+    }
+
+    @Override
     public UserAccount create(
             String fullName, String normalizedEmail, String passwordHash, UserRole role) {
         KeyHolder keyHolder = new GeneratedKeyHolder();
@@ -72,17 +102,34 @@ public class JdbcUserAccountRepository implements UserAccountRepository {
         return new UserAccount(id, normalizedEmail, passwordHash, fullName, role, true);
     }
 
+    @Override
+    public UserAccount updateProfile(long userId, String fullName) {
+        int updated = jdbcTemplate.update(
+                "UPDATE users SET full_name = ?, updated_at = CURRENT_TIMESTAMP(6) WHERE id = ?",
+                fullName,
+                userId);
+        if (updated != 1) {
+            throw new IllegalStateException("Expected exactly one user profile to be updated.");
+        }
+        return findById(userId)
+                .orElseThrow(() -> new IllegalStateException("Updated user profile could not be reloaded."));
+    }
+
+    @Override
+    public void updatePasswordHash(long userId, String passwordHash) {
+        int updated = jdbcTemplate.update(
+                "UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP(6) WHERE id = ?",
+                passwordHash,
+                userId);
+        if (updated != 1) {
+            throw new IllegalStateException("Expected exactly one user password to be updated.");
+        }
+    }
+
     private long generatedId(KeyHolder keyHolder) {
-        Map<String, Object> keys = keyHolder.getKeys();
-        if (keys != null) {
-            return keys.entrySet().stream()
-                    .filter(entry -> entry.getKey().equalsIgnoreCase("id"))
-                    .map(Map.Entry::getValue)
-                    .filter(Number.class::isInstance)
-                    .map(Number.class::cast)
-                    .findFirst()
-                    .map(Number::longValue)
-                    .orElseThrow(() -> new IllegalStateException("Database did not return a user ID."));
+        Number key = keyHolder.getKey();
+        if (key != null) {
+            return key.longValue();
         }
 
         throw new IllegalStateException("Database did not return a user ID.");

@@ -1,30 +1,236 @@
+import {
+  Bell,
+  Boxes,
+  ClipboardList,
+  Factory,
+  FileCheck2,
+  Gauge,
+  House,
+  LayoutGrid,
+  LogIn,
+  LogOut,
+  Menu,
+  Package,
+  Search,
+  Shirt,
+  Truck,
+  UserRound,
+  Users,
+  Warehouse,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
-import { getNavigationItems, roleLabels } from "../navigation/navigation";
 import { useAuth } from "../auth/useAuth";
+import { BrandIdentity } from "../components/BrandLogo";
+import { StarsBackground } from "../components/StarsBackground";
+import { Button } from "../components/ui/Button";
+import { buttonStyles } from "../components/ui/buttonStyles";
+import { ThemeToggle } from "../components/ui/ThemeToggle";
+import { cn } from "../components/ui/cn";
+import { MotionPage } from "../motion/MotionPage";
+import { getNavigationItems, roleLabels, type NavigationItem } from "../navigation/navigation";
 
-function navigationClassName({ isActive }: { isActive: boolean }) {
-  return [
-    "group block rounded-2xl border px-4 py-3 transition",
-    isActive
-      ? "border-teal-400/40 bg-teal-400/10 text-white"
-      : "border-transparent text-slate-300 hover:border-slate-700 hover:bg-slate-900 hover:text-white",
-  ].join(" ");
+type NavigationGroup = "Overview" | "Operations" | "Management";
+
+function navigationGroup(item: NavigationItem): NavigationGroup {
+  const path = item.path;
+  if (path === "/" || path.startsWith("/dashboard")) return "Overview";
+  if (
+    path.startsWith("/products")
+    || path.startsWith("/orders")
+    || path.startsWith("/quotations")
+    || path.startsWith("/supplies")
+    || path.startsWith("/supplier")
+    || path.startsWith("/inventory")
+    || path.startsWith("/production")
+    || path.startsWith("/deliveries")
+  ) return "Operations";
+  return "Management";
+}
+
+function navigationIcon(item: NavigationItem): LucideIcon {
+  const path = item.path;
+  if (path === "/") return House;
+  if (path.startsWith("/dashboard")) return Gauge;
+  if (path.startsWith("/products/new")) return Package;
+  if (path.startsWith("/products")) return Shirt;
+  if (path.startsWith("/orders")) return ClipboardList;
+  if (path.startsWith("/quotations")) return FileCheck2;
+  if (path.startsWith("/inventory")) return Warehouse;
+  if (path.startsWith("/supplies") || path.startsWith("/supplier")) return Boxes;
+  if (path.startsWith("/production")) return Factory;
+  if (path.startsWith("/deliveries")) return Truck;
+  if (path.startsWith("/notifications")) return Bell;
+  if (path.startsWith("/search")) return Search;
+  if (path.startsWith("/admin")) return Users;
+  if (path.startsWith("/profile")) return UserRound;
+  if (path.startsWith("/login")) return LogIn;
+  return LayoutGrid;
+}
+
+function Logo({ compact = false }: { compact?: boolean }) {
+  return (
+    <Link aria-label="LankaWear Apparel home" className="group min-w-0" to="/">
+      <BrandIdentity className="transition group-hover:-translate-y-0.5" compact={compact} responsive />
+    </Link>
+  );
+}
+
+function RouteCanvas({ pathname }: { pathname: string }) {
+  const page = <MotionPage key={pathname}><Outlet /></MotionPage>;
+
+  if (pathname === "/") {
+    return page;
+  }
+
+  return (
+    <StarsBackground className="min-h-[calc(100svh-4.5rem)]">
+      {page}
+    </StarsBackground>
+  );
+}
+
+function NavigationLinks({
+  items,
+  onNavigate,
+}: {
+  items: NavigationItem[];
+  onNavigate?: () => void;
+}) {
+  const groups: NavigationGroup[] = ["Overview", "Operations", "Management"];
+
+  return (
+    <nav aria-label="Primary navigation" className="space-y-6">
+      {groups.map((group) => {
+        const groupedItems = items.filter((item) => navigationGroup(item) === group);
+        if (groupedItems.length === 0) return null;
+        return (
+          <section key={group}>
+            <h2 className="mb-2 px-3 text-[0.68rem] font-bold uppercase tracking-[0.16em] text-muted">{group}</h2>
+            <div className="space-y-1">
+              {groupedItems.map((item) => {
+                const Icon = navigationIcon(item);
+                return (
+                  <NavLink
+                    className={({ isActive }) => cn(
+                      "group relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition",
+                      isActive
+                        ? "bg-primary-soft text-primary"
+                        : "text-foreground-muted hover:bg-surface-muted hover:text-foreground",
+                    )}
+                    end={item.path === "/"}
+                    key={item.path}
+                    onClick={onNavigate}
+                    title={item.description}
+                    to={item.path}
+                  >
+                    {({ isActive }) => (
+                      <>
+                        <span className={cn(
+                          "absolute inset-y-2 left-0 w-0.5 origin-center scale-y-50 rounded-full bg-primary opacity-0 transition duration-[180ms] ease-[var(--ease-emphasized)]",
+                          isActive && "scale-y-100 opacity-100",
+                        )} />
+                        <Icon aria-hidden="true" className="h-[1.1rem] w-[1.1rem] shrink-0 transition-transform duration-150 group-hover:translate-x-0.5" />
+                        <span>{item.label}</span>
+                      </>
+                    )}
+                  </NavLink>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })}
+    </nav>
+  );
+}
+
+function PublicShell() {
+  const { user, isLoading } = useAuth();
+  const location = useLocation();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const items = getNavigationItems(user);
+
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur-xl">
+        <div className="mx-auto flex min-h-18 max-w-[1440px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-10">
+          <Logo />
+          <nav aria-label={isLoading ? "Public navigation loading" : "Primary navigation"} className="hidden items-center gap-1 md:flex">
+            {items.slice(0, 4).map((item) => (
+              <NavLink
+                aria-label={item.path === "/login" ? "Sign in navigation" : undefined}
+                className={({ isActive }) => cn(
+                  "rounded-lg px-3 py-2 text-sm font-semibold transition",
+                  isActive ? "bg-primary-soft text-primary" : "text-foreground-muted hover:text-foreground",
+                )}
+                end={item.path === "/"}
+                key={item.path}
+                to={item.path}
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
+          <div className="flex items-center gap-2">
+            <ThemeToggle compact />
+            {!user ? (
+              <span className="hidden sm:block">
+                <Link aria-label="Sign in to LankaWear Apparel" className={buttonStyles({ size: "sm", variant: "primary" })} to="/login">Sign in</Link>
+              </span>
+            ) : null}
+            <Button
+              aria-controls="public-mobile-navigation"
+              aria-expanded={isMenuOpen}
+              aria-label="Toggle navigation"
+              className="md:hidden"
+              onClick={() => setIsMenuOpen((open) => !open)}
+              size="icon"
+              variant="secondary"
+            >
+              {isMenuOpen ? <X aria-hidden="true" className="h-5 w-5" /> : <Menu aria-hidden="true" className="h-5 w-5" />}
+            </Button>
+          </div>
+        </div>
+        {isMenuOpen ? (
+          <nav aria-label="Mobile navigation" className="motion-dropdown border-t border-border bg-surface px-4 py-3 md:hidden" id="public-mobile-navigation">
+            <div className="mx-auto grid max-w-[1440px] gap-1">
+              {items.map((item) => (
+                <NavLink className="rounded-xl px-4 py-3 text-sm font-semibold text-foreground-muted hover:bg-surface-muted hover:text-foreground" key={item.path} onClick={() => setIsMenuOpen(false)} to={item.path}>{item.label}</NavLink>
+              ))}
+            </div>
+          </nav>
+        ) : null}
+      </header>
+      <main><RouteCanvas pathname={location.pathname} /></main>
+    </div>
+  );
 }
 
 export function AppLayout() {
   const { user, isLoading, logout } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [isNavigationOpen, setIsNavigationOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const navigationItems = getNavigationItems(user);
+
+  if (isLoading || !user) return <PublicShell />;
+
+  const currentItem = navigationItems
+    .filter((item) => item.path === "/" ? location.pathname === "/" : location.pathname.startsWith(item.path))
+    .sort((left, right) => right.path.length - left.path.length)[0];
 
   async function handleLogout() {
     setLogoutError(null);
     setIsLoggingOut(true);
     try {
       await logout();
+      navigate("/", { replace: true });
     } catch {
       setLogoutError("Sign out failed. Your session may still be active; please try again.");
     } finally {
@@ -32,101 +238,101 @@ export function AppLayout() {
     }
   }
 
+  const initials = user?.fullName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "TG";
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/95 backdrop-blur">
-        <div className="flex min-h-18 items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-          <div className="flex min-w-0 items-center gap-3">
-            <button
-              aria-controls="primary-navigation"
-              aria-expanded={isNavigationOpen}
-              aria-label="Toggle navigation"
-              className="rounded-xl border border-slate-700 p-2 text-slate-200 hover:border-teal-400 md:hidden"
-              onClick={() => setIsNavigationOpen((open) => !open)}
-              type="button"
-            >
-              <span aria-hidden="true" className="block text-lg leading-none">☰</span>
-            </button>
-            <NavLink className="flex min-w-0 items-center gap-3" to="/">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-teal-300 font-black text-slate-950">
-                TG
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-bold text-white sm:text-base">
-                  Textile &amp; Garment
-                </span>
-                <span className="block truncate text-xs text-slate-400">Management System</span>
-              </span>
-            </NavLink>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {isLoading ? (
-              <span className="text-sm text-slate-400">Checking session…</span>
-            ) : user ? (
-              <>
-                <div className="hidden text-right sm:block">
-                  <p className="text-sm font-semibold text-white">{user.fullName}</p>
-                  <p className="text-xs text-slate-400">{roleLabels[user.role]}</p>
-                </div>
-                <button
-                  className="rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-teal-400 hover:text-white disabled:cursor-wait disabled:opacity-60"
-                  disabled={isLoggingOut}
-                  onClick={handleLogout}
-                  type="button"
-                >
-                  {isLoggingOut ? "Signing out…" : "Sign out"}
-                </button>
-              </>
-            ) : null}
-          </div>
+    <div className="min-h-screen bg-background text-foreground">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-68 border-r border-border bg-surface/95 px-4 py-5 backdrop-blur-xl lg:flex lg:flex-col">
+        <div className="px-2"><Logo /></div>
+        <div className="scrollbar-subtle mt-8 flex-1 overflow-y-auto pr-1">
+          <NavigationLinks items={navigationItems} />
         </div>
-        {logoutError ? (
-          <p className="border-t border-rose-900/60 bg-rose-950/70 px-6 py-2 text-sm text-rose-200" role="alert">
-            {logoutError}
-          </p>
-        ) : null}
-      </header>
-
-      <div className="mx-auto grid w-full max-w-[1600px] md:grid-cols-[17rem_minmax(0,1fr)]">
-        <aside
-          className={`${isNavigationOpen ? "block" : "hidden"} border-b border-slate-800 bg-slate-950 p-4 md:sticky md:top-18 md:block md:h-[calc(100vh-4.5rem)] md:border-b-0 md:border-r md:p-6`}
-          id="primary-navigation"
-        >
-          <div className="mb-5 px-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-              {user ? "Your workspace" : "Public access"}
-            </p>
+        <div className="mt-5 rounded-2xl border border-border bg-surface-muted p-3">
+          <div className="flex items-center gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary-soft text-sm font-bold text-primary">{initials}</span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-foreground">{user?.fullName ?? "Checking session…"}</p>
+              <p className="truncate text-xs text-muted">{user ? roleLabels[user.role] : "Secure workspace"}</p>
+            </div>
           </div>
-          <nav aria-label="Primary navigation" className="space-y-1">
-            {navigationItems.map((item) => (
-              <NavLink
-                className={navigationClassName}
-                end={item.path === "/"}
-                key={item.path}
-                onClick={() => setIsNavigationOpen(false)}
-                to={item.path}
+          <p className="sr-only">Navigation shows only the modules and supporting tools available to your current role.</p>
+          <p className="sr-only">Role-aware workspace</p>
+        </div>
+      </aside>
+
+      {isNavigationOpen ? (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button
+            aria-label="Close navigation"
+            className="motion-drawer-overlay absolute inset-0 bg-black/50"
+            onClick={() => setIsNavigationOpen(false)}
+            type="button"
+          />
+          <aside className="motion-drawer absolute inset-y-0 left-0 flex w-[min(88vw,20rem)] flex-col border-r border-border bg-surface p-5 shadow-2xl" id="primary-navigation">
+            <div className="flex items-center justify-between gap-3">
+              <Logo />
+              <Button aria-label="Close navigation" onClick={() => setIsNavigationOpen(false)} size="icon" variant="ghost">
+                <X aria-hidden="true" className="h-5 w-5" />
+              </Button>
+            </div>
+            <div className="scrollbar-subtle mt-8 overflow-y-auto">
+              <NavigationLinks items={navigationItems} onNavigate={() => setIsNavigationOpen(false)} />
+            </div>
+          </aside>
+        </div>
+      ) : null}
+
+      <div className="lg:pl-68">
+        <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-xl">
+          <div className="flex min-h-18 items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+            <div className="flex min-w-0 items-center gap-3">
+              <Button
+                aria-controls="primary-navigation"
+                aria-expanded={isNavigationOpen}
+                aria-label="Toggle navigation"
+                className="lg:hidden"
+                onClick={() => setIsNavigationOpen(true)}
+                size="icon"
+                variant="secondary"
               >
-                <span className="block text-sm font-semibold">{item.label}</span>
-                <span className="mt-1 block text-xs leading-5 text-slate-500 group-hover:text-slate-400">
-                  {item.description}
-                </span>
-              </NavLink>
-            ))}
-          </nav>
-          <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-300">
-              Foundation
-            </p>
-            <p className="mt-2 text-xs leading-5 text-slate-400">
-              Module links will be introduced only by their approved implementation tickets.
-            </p>
-          </div>
-        </aside>
+                <Menu aria-hidden="true" className="h-5 w-5" />
+              </Button>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-muted">Workspace</p>
+                <p className="truncate text-sm font-bold text-foreground sm:text-base">{currentItem?.label ?? "LankaWear operations"}</p>
+              </div>
+            </div>
 
-        <main className="min-w-0">
-          <Outlet />
-        </main>
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <Link aria-label="Search" className={buttonStyles({ size: "icon", variant: "ghost" })} to="/search">
+                <Search aria-hidden="true" className="h-[1.15rem] w-[1.15rem]" />
+              </Link>
+              <Link aria-label="Notifications" className={buttonStyles({ size: "icon", variant: "ghost" })} to="/notifications">
+                <Bell aria-hidden="true" className="h-[1.15rem] w-[1.15rem]" />
+              </Link>
+              <ThemeToggle compact />
+              <Button
+                aria-label="Sign out"
+                isLoading={isLoggingOut}
+                onClick={handleLogout}
+                size="icon"
+                variant="ghost"
+              >
+                <LogOut aria-hidden="true" className="h-[1.15rem] w-[1.15rem]" />
+              </Button>
+            </div>
+          </div>
+          {logoutError ? (
+            <p className="border-t border-danger-border bg-danger-soft px-6 py-2 text-sm text-danger" role="alert">{logoutError}</p>
+          ) : null}
+        </header>
+
+        <main className="min-w-0"><RouteCanvas pathname={location.pathname} /></main>
       </div>
     </div>
   );

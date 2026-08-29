@@ -12,25 +12,40 @@ Never make an application schema change with undocumented manual SQL.
 - Development commands: Liquibase Maven plugin through the repository's Maven Wrapper.
 - Automated verification: H2 in MySQL compatibility mode.
 
-TGMS-2's `0000_baseline` changeset establishes the reversible, auditable starting
-point. TGMS-3 adds the shared `users` account table required by authentication.
-TGMS-10 adds the garment catalog source of truth, TGMS-20 adds the supplier profile
-source of truth, and TGMS-22 adds supplier-owned material supply records. Inventory,
-order, production, and delivery tables do not exist yet. Liquibase also creates its own
-`DATABASECHANGELOG` and `DATABASECHANGELOGLOCK` infrastructure tables; these are not
-application tables.
+The migration chain covers the shared account, catalog, supplier, inventory, order,
+quotation, billing, production, delivery, password-recovery, and notification schemas.
+Liquibase also creates its own `DATABASECHANGELOG` and `DATABASECHANGELOGLOCK`
+infrastructure tables; these are not application tables.
 
 ```text
 database/migrations/
 ├── changes/
-│   ├── 0000_baseline.sql
-│   ├── 20260822181000_create_users.sql
-│   ├── 20260823105000_create_garment_product_catalog.sql
-│   ├── 20260823120500_create_supplier_profiles.sql
-│   └── 20260823123000_create_material_supplies.sql
+│   ├── baseline.sql
+│   ├── create-users.sql
+│   ├── create-garment-product-catalog.sql
+│   ├── create-supplier-profiles.sql
+│   ├── create-material-supplies.sql
+│   ├── create-inventory-materials.sql
+│   ├── create-customer-orders.sql
+│   ├── create-order-items.sql
+│   ├── create-order-status-history.sql
+│   ├── create-customer-quotations.sql
+│   ├── create-order-billing.sql
+│   ├── create-production-tasks.sql
+│   ├── create-production-task-details.sql
+│   ├── create-production-task-material-requirements.sql
+│   ├── create-production-task-material-usage.sql
+│   ├── add-production-quality-control.sql
+│   ├── create-deliveries.sql
+│   ├── enable-safe-delivery-cancellation.xml
+│   ├── create-password-reset-tokens.sql
+│   └── create-notifications.sql
 ├── db.changelog-master.xml
 └── README.md
 ```
+
+The files above are shown in dependency order. Their number-free names do not control
+execution; the explicit include sequence in `db.changelog-master.xml` does.
 
 ## Local Configuration
 
@@ -77,11 +92,12 @@ drift apart.
 ## Add a Migration
 
 1. Update the branch and run `npm run db:migrate`.
-2. Add one Liquibase formatted SQL file under `changes/` named
-   `<UTC timestamp>_<short_action_in_snake_case>.sql`.
+2. Add one Liquibase formatted SQL file under `changes/` with a descriptive,
+   number-free kebab-case name, such as `create-example-table.sql`.
 3. Give the changeset a unique immutable ID and author, for example
-   `--changeset initials:20260822120000-add-example`.
-4. Include the file once, in chronological order, from `db.changelog-master.xml`.
+   `--changeset initials:create-example-table`.
+4. Include the file once, after every migration that provides a table, column, index,
+   or constraint it depends on, from `db.changelog-master.xml`.
 5. Add explicit `--rollback` SQL. Liquibase does not infer rollback for formatted SQL.
 6. Run `npm run db:verify`, then verify against MySQL with `db:status`, `db:migrate`,
    `db:rollback:preview`, `db:rollback`, and `db:migrate` again.
@@ -90,7 +106,9 @@ drift apart.
 Never edit, rename, reorder, or reuse the ID of a changeset that has been shared or
 applied outside a disposable local database. Correct it with a new forward migration.
 Keep one cohesive schema change per changeset and separate large data backfills from
-schema changes.
+schema changes. Existing files that were renamed retain their original database
+identity through Liquibase `logicalFilePath`; do not remove or change those compatibility
+paths, because deployed databases still record them in `DATABASECHANGELOG`.
 
 ## Naming Conventions
 
@@ -147,8 +165,10 @@ name, active flag, and one controlled role. Supported stored roles are
 `ADMINISTRATOR`, `SUPPLIER`, `INVENTORY_MANAGER`, `PRODUCTION_MANAGER`,
 `SALES_OFFICER`, and `CUSTOMER`.
 
-Public registration is an application rule that always inserts `CUSTOMER`; internal
-account provisioning belongs to a later approved administrator workflow. Never add
+Public registration is an application rule that always inserts `CUSTOMER`. TGMS-70
+uses this same table as the account source of truth for Administrator-controlled
+internal account provisioning, role changes, and active/inactive access; it needs no
+new schema because `role` and `is_active` are already authoritative columns. Never add
 plaintext passwords, tokens, development users, or staff seed credentials to a
 migration.
 
@@ -383,3 +403,238 @@ not maintain a competing current-offer record.
 | Permissions | Only the owning Supplier archives; company roles are read-only and unrelated roles are denied |
 | Inventory handoff | Stable IDs, active-selection rule, restrictive FK rule, and read endpoints are documented |
 | Schema impact | No changeset added; all five existing changesets remain reversible |
+
+## TGMS-40 Customer Order Header Contract
+
+Order Management owns `orders` as the customer-order header source of truth. Each row
+has a generated stable `BIGINT id`, a required unique `order_number`, a restrictive
+`customer_id` foreign key to the shared `users.id`, controlled lifecycle `status`, and
+the standard `created_at` / `updated_at` timestamps.
+
+Supported stored statuses are `PENDING`, `CONFIRMED`, `IN_PRODUCTION`,
+`READY_FOR_DELIVERY`, `COMPLETED`, and `CANCELLED`. TGMS-40 defines the controlled
+values only; status transition rules belong to later approved Order Management tickets.
+
+The database guarantees that `customer_id` references an existing account and prevents
+a referenced account from being deleted or re-keyed. It deliberately does not copy
+customer email, name, role, or active state into `orders`. As with the Supplier profile
+contract, the later order-creation service must resolve the authenticated/customer
+account and verify that it is active with role `CUSTOMER` before inserting the header;
+a SQL `CHECK` constraint cannot reference the `users` table without creating a second
+account source of truth.
+
+TGMS-41 order-item rows reference catalog IDs supplied by the TGMS-16 Product handoff
+and keep order-time selection/price snapshots without changing the header contract.
+Future Production and Delivery records must reference `orders.id` from their own module
+tables rather than adding competing production/delivery master data to the order header.
+TGMS-40 itself intentionally added no order items, totals, invoices, payment records,
+production jobs, delivery rows, APIs, or UI.
+
+| Acceptance check | Result |
+|---|---|
+| Stable order identity | Generated `orders.id` plus unique nonblank `order_number` |
+| Customer/account link | Required restrictive `customer_id -> users.id` foreign key |
+| Controlled lifecycle | Database check accepts only the six documented order statuses |
+| Audit timestamps | Required microsecond `created_at` and `updated_at` defaults |
+| Production/Delivery readiness | Future modules reference stable `orders.id`; no premature cross-module columns added |
+| Repeatable migration | Current migration workflow applies, rolls back, and reapplies the full changeset chain |
+
+## TGMS-41 Order Item Contract
+
+Order Management owns `order_items` as the transactional line structure under
+`orders`. Each row has a stable generated `id`, required `order_id`, stable Product
+Management `product_id` and `variant_id` references, positive integer `quantity`, and
+order-time snapshots of `selected_size`, `selected_color`, and `unit_price_snapshot`.
+
+The Product catalog remains the source of truth. TGMS-41 adds only a backward-compatible
+unique constraint on `garment_product_variants(product_id, id)` so the order-item composite
+foreign key can prove that the selected variant actually belongs to the referenced
+product. Product names, category data, current availability, and current catalog price
+are not copied as competing master data.
+
+Size, color, and unit price are deliberately stored as transaction snapshots. Order
+creation must call `ProductService.requireOrderSelectableVariant(productId, variantId)`
+and persist the returned variant size, color, and current price; clients must not be
+trusted to choose their own snapshot price. Later edits to the Product variant therefore
+do not rewrite historical order details or historical prices.
+
+The schema rejects missing orders, broken/mismatched Product references, zero or negative
+quantities, blank size/color snapshots, and non-positive price snapshots. Restrictive
+foreign keys preserve order and catalog history while order items reference those rows.
+TGMS-41 intentionally adds no order-creation API, totals, discounts, quotations, invoices,
+payments, production jobs, delivery records, or UI.
+
+## TGMS-46 Order Status History Contract
+
+`create-order-status-history.sql` adds the application-managed transition audit table used by
+Order Management. It references the existing `orders.id` and authenticated `users.id` with
+restrictive foreign keys, stores controlled `from_status` / `to_status` values, rejects same-state
+history rows, and records `changed_at` using the project timestamp convention.
+
+`orders.status` remains the current lifecycle source of truth; `order_status_history` is an audit
+trail, not a competing current-status column. Application updates must use the Order service's
+controlled transition policy and transaction so the current row and history entry commit together.
+The migration workflow now contains nine reversible changesets.
+
+## TGMS-48 Customer Quotation Contract
+
+`create-customer-quotations.sql` adds immutable issued quotation records without
+reusing the `orders` lifecycle. `quotations.customer_id` and `quotations.issued_by_user_id` reference
+the shared `users.id` source of truth with restrictive foreign keys. `quotation_items` references the
+existing Product and variant IDs, including the existing `(product_id, id)` Product-variant contract,
+and stores issued-time product-name, size, color, quantity, and unit-price snapshots.
+
+The schema rejects blank quotation numbers/product names/selections, non-positive quantities/prices,
+and broken or mismatched Product references. Totals are derived from the immutable line snapshots.
+The migration is fully reversible by dropping `quotation_items` before `quotations`; the migration
+workflow now contains ten reversible changesets.
+
+## TGMS-49 Order Billing Contract
+
+`create-order-billing.sql` adds `order_invoices` and
+`order_payment_records` without introducing a payment gateway. `order_invoices.order_id` is unique,
+so one issued invoice is retained per customer order, and the invoice stores the total calculated
+from TGMS-41 order-item price snapshots. The invoice/customer order relationship is restrictive so
+historical billing cannot outlive or silently detach from its order.
+
+`order_payment_records` stores the current manual payment state (`UNPAID`, `PARTIALLY_PAID`, or
+`PAID`), non-negative amount, optional controlled manual method (`CASH`, `BANK_TRANSFER`, `OTHER`),
+reference/note, authenticated recorder ID, and timestamps. A composite foreign key on
+`(order_id, invoice_id)` guarantees that the payment record cannot be paired with an invoice from a
+different order.
+
+Cancellation continues to use `orders.status = CANCELLED`; TGMS-49 adds no delete cascade and no
+physical-order removal. Billing/history foreign keys stay restrictive. The migration is reversible by
+dropping `order_payment_records` before `order_invoices`. The full migration workflow now contains
+eleven reversible changesets.
+
+## Production Task Contract (TGMS-50)
+
+Production Management owns `production_tasks`. Its generated `id` is the stable production-task
+identifier; `task_number` is a separate unique human-facing identifier. Every task references the
+existing Order Management source of truth through `order_id -> orders.id` with restrictive
+update/delete behavior so later Production records cannot orphan or rewrite Order history.
+
+The controlled Production lifecycle follows the approved project design exactly:
+`PENDING -> IN_PROGRESS -> COMPLETED`. `started_at` is required once a task is in progress and
+`completed_at` is required only when it is completed; a completion time cannot precede the start
+time. The table also retains the normal `created_at` and `updated_at` timestamps.
+
+TGMS-50 intentionally does not add a due date, assignee, material allocation, progress percentage,
+production line, or scheduling fields because those belong to later Production Management tickets.
+The database guarantees that the referenced Order exists, but SQL does not duplicate or inspect
+`orders.status`. The future task-creation service must use the TGMS-49 Order handoff contract and
+require `readyForProduction = true` before inserting a task rather than reading/updating Order data
+directly.
+
+The full migration workflow now contains twelve reversible changesets.
+
+
+## TGMS-52 production task details
+
+`create-production-task-details.sql` adds a one-to-one `production_task_details`
+record keyed by the stable Production task ID. Required `work_details` and simple text
+`work_assignment` plus optional `work_notes` persist Production Manager organization data without
+inventing worker/team master records. The task foreign key is restrictive so saved detail/history
+cannot be orphaned.
+
+## TGMS-53 production task material requirements
+
+`create-production-task-material-requirements.sql` adds the Production-owned relation
+between stable `production_tasks.id` and stable `inventory_materials.id`. The composite primary key
+prevents duplicate material assignment within one task, `required_quantity` must be positive, and
+both foreign keys use restrictive update/delete behavior so Production/Inventory history cannot be
+orphaned. No Inventory master fields or stock quantity are copied into this relation.
+
+The migration is reversible by dropping `production_task_material_requirements`. The full migration
+workflow now contains fourteen reversible changesets.
+
+## TGMS-55 production material usage history
+
+TGMS-55 adds `production_task_material_usage` as the audit record for material quantities actually
+deducted for a Production task under the current workflow. Each usage row must reference an existing
+`(production_task_id, inventory_material_id)` pair from `production_task_material_requirements`; this
+prevents Production from recording usage for an unassigned Inventory material. The unique
+`(production_task_id, inventory_material_id)` constraint makes each approved task/material requirement
+consumable once, while `recorded_by_user_id` preserves who recorded the action.
+
+The stored `quantity_used` is the approved TGMS-53 `required_quantity` used by the current workflow.
+Production never updates `inventory_materials.current_quantity` directly. The application calls the
+Inventory-owned atomic `consumeStock(...)` service inside the same Spring transaction that records
+usage. A Production task row lock serializes duplicate submissions; any Inventory failure rolls back
+all deductions and usage rows together. Material requirements are locked after the task leaves
+`PENDING` so the usage record remains explainable. No reservation, alternate actual-quantity model,
+Production completion, or automated optimization is introduced by this changeset.
+
+## TGMS-57 simple production quality control
+
+`add-production-quality-control.sql` adds a deliberately small quality-control state to
+`production_tasks`: `PENDING`, `PASSED`, or `FAILED`, plus the authenticated checker ID and check
+timestamp. PENDING has no checker/time; PASSED and FAILED require both. The checker references the
+shared `users.id` source of truth with restrictive history-preserving foreign keys. No separate quality
+system, inspection-item table, defect catalogue, or Delivery data is created. The full migration
+workflow now contains sixteen reversible changesets.
+
+## TGMS-60 delivery record contract
+
+`create-deliveries.sql` adds `deliveries` as the Delivery Management record source
+of truth. Each row has a generated stable `id`, unique nonblank human-facing `delivery_number`, and
+one restrictive `order_id -> orders.id` relationship. The current approved simple scope models one
+Delivery record per Order, so `order_id` is unique; a later split-shipment requirement would need an
+explicit forward migration rather than silently weakening this contract.
+
+The scheduled date and time are represented by the required UTC `scheduled_at TIMESTAMP(6)`, which stores the
+scheduled delivery date and time in one business-event timestamp. Delivery-owned destination data is
+kept in required `delivery_address` plus optional `delivery_notes`; customer identity and Order data
+remain owned by `users`/Order Management and are not duplicated as master data.
+
+The controlled Delivery lifecycle is `SCHEDULED`, `OUT_FOR_DELIVERY`, `DELIVERED`, or `CANCELLED`,
+with `SCHEDULED` as the database default. TGMS-60 intentionally does not implement the later status
+transition rules or API/UI operations. The foreign key guarantees that the Order exists, but Order
+readiness is an application rule: the later Delivery creation service must call the TGMS-57/TGMS-49
+Order handoff and require `readyForDelivery = true` instead of copying or directly inspecting
+`orders.status` as Delivery-owned state.
+
+The migration is reversible with `DROP TABLE deliveries`. The full migration workflow now contains
+seventeen reversible changesets.
+
+## TGMS-66 safe Delivery cancellation and replacement lock
+
+`enable-safe-delivery-cancellation.xml` evolves the TGMS-60 Delivery relationship so
+incorrect scheduled records can be cancelled without deleting history and the Order can then receive
+a corrected replacement Delivery.
+
+The migration removes the original `UNIQUE(deliveries.order_id)` constraint and adds nullable
+`active_order_lock_id`. Existing non-cancelled rows are backfilled with their stable `order_id`, while
+cancelled history keeps a null lock. `active_order_lock_id` has a restrictive foreign key to
+`orders.id`, a unique constraint, and a consistency check requiring every non-cancelled Delivery to
+hold its own Order ID as the active lock while every `CANCELLED` row has a null lock.
+
+Application cancellation updates `status = CANCELLED` and clears the active lock in the same SQL
+statement. A replacement Delivery keeps the same historical `order_id` relationship but receives a
+new generated Delivery ID/number and claims the unique active lock. This allows multiple cancelled
+history rows over time while guaranteeing at most one non-cancelled Delivery per Order. The full
+migration workflow now contains nineteen changesets.
+
+## TGMS-71 password reset tokens
+
+`create-password-reset-tokens.sql` adds the security-support table used by account
+recovery. Each row references the stable `users.id`, stores only a unique 64-character SHA-256 token
+hash, and records an expiry plus nullable `used_at` marker. Raw reset tokens and passwords are never
+stored in this table. The user/open-token index supports invalidating every remaining recovery token
+after one reset succeeds. The migration is reversible by dropping the token table; the full
+migration workflow now contains twenty changesets.
+
+## TGMS-73 operational notifications
+
+`create-notifications.sql` adds `notifications` as a user-facing supporting/audit
+record, not a replacement for Inventory, Order, Production, or Delivery state. Each notification
+references the stable recipient `users.id`, records a controlled kind, concise title/message,
+`source_module`, positive `source_record_id`, creation timestamp, and nullable `read_at` timestamp.
+The source pair intentionally remains polymorphic rather than copying source-module business data
+into the notification table.
+
+Recipient/read and source indexes support the authenticated inbox and operational traceability.
+Foreign-key deletion is restrictive so user/notification history is not silently orphaned. The
+migration is reversible by dropping `notifications`; the full migration workflow now contains twenty-one
+changesets.
