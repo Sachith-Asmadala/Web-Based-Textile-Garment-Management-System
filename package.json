@@ -28,6 +28,7 @@
     "lint": "npm run lint --workspace frontend && eslint scripts",
     "verify": "npm run security:check && npm run lint && npm run typecheck && npm test && npm run db:verify && npm run build",
     "security:check": "./scripts/security-check.sh",
+    "smtp:check": "node scripts/check-smtp.mjs backend/.env",
     "test:nfr": "cd backend && ./mvnw -Dtest=NonFunctionalRequirementsIntegrationTests test",
     "test:uat": "./scripts/run-uat.sh",
     "uat:catalog:check": "node scripts/verify-uat-catalog.mjs",

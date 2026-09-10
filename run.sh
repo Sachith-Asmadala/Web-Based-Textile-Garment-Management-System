@@ -67,6 +67,9 @@ if [[ ! -d "$PROJECT_ROOT/node_modules/concurrently" ]]; then
   npm ci
 fi
 
+node scripts/check-smtp.mjs backend/.env ||
+  fail "Authentication email cannot be delivered. Correct the SMTP settings in backend/.env."
+
 if command -v mysqladmin >/dev/null 2>&1 && ! mysqladmin ping --silent >/dev/null 2>&1; then
   echo "[TGMS] Warning: MySQL did not answer a local ping. Start MySQL before using database features." >&2
 fi

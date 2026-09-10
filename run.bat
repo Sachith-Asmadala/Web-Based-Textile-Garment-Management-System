@@ -65,6 +65,12 @@ if not exist "node_modules\concurrently" (
   if errorlevel 1 exit /b 1
 )
 
+node scripts\check-smtp.mjs backend\.env
+if errorlevel 1 (
+  echo [TGMS] Error: Authentication email cannot be delivered. Correct the SMTP settings in backend\.env.
+  exit /b 1
+)
+
 if /I "%~1"=="--check" (
   echo [TGMS] Environment check passed.
   exit /b 0

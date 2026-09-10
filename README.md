@@ -1,15 +1,21 @@
-# LankaWear Apparel
-
-## Web-Based Textile & Garment Management System
-
-LankaWear Apparel is a full-stack operations platform for a Sri Lankan garment
-business. It connects product cataloguing, suppliers, material inventory, customer
-orders, quotations, billing, production, quality control, delivery, notifications,
-reporting, and role-based administration through one source of truth.
-
 <p align="center">
   <img src="frontend/public/brand/lankawear-lockup.png" alt="LankaWear Apparel" width="460">
 </p>
+
+<h1 align="center">LankaWear Apparel</h1>
+
+<p align="center">
+  <strong>Web-Based Textile &amp; Garment Management System</strong>
+</p>
+
+<p align="center">
+  React 19 · Spring Boot 4 · MySQL 8 · Liquibase
+</p>
+
+LankaWear Apparel is a full-stack operations platform built for a Sri Lankan garment
+business. It brings product cataloguing, supplier coordination, material inventory,
+customer orders, quotations, billing, production, quality control, delivery,
+notifications, reporting, and role-based administration into one system of record.
 
 ## Contents
 
@@ -26,13 +32,14 @@ reporting, and role-based administration through one source of truth.
 - [Project structure](#project-structure)
 - [Security model](#security-model)
 - [Troubleshooting](#troubleshooting)
-- [Deployment and supporting documentation](#deployment-and-supporting-documentation)
+- [Deployment](#deployment)
+- [Project documentation](#project-documentation)
 
 ## Core capabilities
 
 | Area | Capabilities |
 | --- | --- |
-| Authentication | Customer registration, login/logout, session recovery, password reset, secure cookies |
+| Authentication | Verified customer registration, login/logout, session recovery, password reset, secure cookies |
 | Administration | Account provisioning, role assignment, account activation and deactivation |
 | Product catalogue | Categories, products, variants, sizes, colours, prices, availability, product images |
 | Supplier management | Supplier profiles, materials, quantities, prices, lead times and lifecycle status |
@@ -68,8 +75,8 @@ MySQL 8+  <--- Liquibase migrations
 ```
 
 The application follows a modular controller → service/domain → repository structure.
-Each module owns its authoritative records, while cross-module workflows use stable
-database identifiers and validated state transitions.
+Each module owns its authoritative records. Cross-module workflows use stable database
+identifiers, server-side authorization, and validated state transitions.
 
 ## Technology stack
 
@@ -105,6 +112,10 @@ The repository includes Maven wrappers for both Unix (`backend/mvnw`) and Window
 
 ## Quick start
 
+Clone the repository, then run the platform launcher for your operating system. On its
+first run, the launcher creates `backend/.env` and stops so that you can add local
+credentials safely.
+
 ### macOS or Linux
 
 ```bash
@@ -126,12 +137,15 @@ On the first launch, the script:
 
 1. verifies Node.js, npm and Java;
 2. creates `backend/.env` from `backend/.env.example` when it is missing;
-3. asks you to configure the database password and JWT secret;
-4. installs locked npm dependencies when they are missing;
-5. starts the API and frontend together.
+3. validates the required application settings and optional SMTP configuration;
+4. installs the locked npm dependencies when they are missing;
+5. starts the API with incremental compilation; and
+6. starts the frontend after the API health check succeeds.
 
-After configuring a newly created `backend/.env`, run the launcher again. Spring Boot
-applies pending Liquibase migrations automatically during API startup.
+Before running the launcher again, create the local database as described in
+[Database setup](#database-setup), then set `DB_PASSWORD` and `JWT_SECRET` in
+`backend/.env`. Spring Boot applies pending Liquibase migrations automatically during
+API startup.
 
 Use validation-only mode to check a machine without starting servers:
 
@@ -151,9 +165,13 @@ Application URLs:
 | Product catalogue | <http://localhost:5173/products> |
 | Login | <http://localhost:5173/login> |
 | Customer registration | <http://localhost:5173/register> |
+| Customer email verification | <http://localhost:5173/verify-email> |
 | API health | <http://localhost:3000/api/health> |
 
 Press `Ctrl+C` in the launcher terminal to stop both servers.
+
+The first backend compilation can take several minutes on slower machines. The
+launcher continues waiting and starts the frontend as soon as the API becomes healthy.
 
 ## Database setup
 
@@ -246,7 +264,11 @@ Important variables:
 | `JWT_SECRET` | Random secret of at least 32 UTF-8 bytes |
 | `JWT_SESSION_HOURS` | Authentication session lifetime |
 | `COOKIE_SECURE` | `false` only for local HTTP; production must use secure cookies |
-| `SMTP_ENABLED` | Enables password-reset email delivery when configured |
+| `SMTP_ENABLED` | Enables customer-verification and password-reset email delivery |
+| `EMAIL_VERIFICATION_TTL_MINUTES` | Lifetime of each six-digit verification code |
+| `EMAIL_VERIFICATION_RESEND_SECONDS` | Minimum delay before another verification email is issued |
+| `EMAIL_VERIFICATION_MAX_ATTEMPTS` | Invalid attempts allowed before a code is locked |
+| `PASSWORD_RESET_RESEND_SECONDS` | Minimum delay before another reset email is issued |
 | `NOTIFICATIONS_ENABLED` | Enables operational in-system notifications |
 | `DEMO_DATA_ALLOWED` | Explicit safety switch for disposable demo seeding |
 
@@ -257,6 +279,37 @@ openssl rand -base64 48
 ```
 
 Never commit `.env`, `backend/.env`, real credentials, password hashes, or tokens.
+
+### Configure Gmail for authentication email
+
+The application reads mail settings from `backend/.env`. For a Gmail sender, enable
+two-step verification for the Google account and create an app password for this
+application. Do not use the normal Google account password.
+
+```dotenv
+SMTP_ENABLED=true
+MAIL_FROM=your-address@gmail.com
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-address@gmail.com
+SMTP_PASSWORD=your_16_character_google_app_password
+SMTP_AUTH=true
+SMTP_USE_STARTTLS=true
+```
+
+Keep `MAIL_FROM` equal to the authenticated Gmail address unless the SMTP account is
+explicitly allowed to send from an alias. Restart `run.sh` or `run.bat` after changing
+the file. New customer accounts receive a six-digit code and cannot sign in until the
+code is accepted at `/verify-email`. Password-reset requests use the same SMTP setup.
+Verify the configured credentials without sending a message:
+
+```bash
+npm run smtp:check
+```
+
+The launchers run the same check before starting TGMS when SMTP is enabled, so an
+expired, revoked, or incorrect app password is reported immediately instead of leaving
+registration emails to fail silently in the background.
 
 ## Demo data
 
@@ -290,22 +343,41 @@ are documented in [the demo-data guide](database/demo/README.md).
 
 Run commands from the repository root unless stated otherwise.
 
+### Application lifecycle
+
 | Command | Purpose |
 | --- | --- |
-| `./run.sh` | Start frontend and backend on macOS/Linux |
-| `run.bat` | Start frontend and backend on Windows |
-| `npm run dev` | Start both development servers directly |
-| `npm run dev:backend` | Start only Spring Boot |
-| `npm run dev --workspace frontend` | Start only Vite |
-| `npm run build` | Build frontend assets and backend JAR |
-| `npm run lint` | Run ESLint checks |
-| `npm run typecheck` | Type-check React and compile Java |
-| `npm test` | Run frontend and backend tests |
-| `npm run verify` | Run the complete local quality gate |
+| `./run.sh` | Validate configuration and start both services on macOS/Linux |
+| `run.bat` | Validate configuration and start both services on Windows |
+| `npm run dev` | Start the API and web development servers directly |
+| `npm run dev:backend` | Start only the Spring Boot API |
+| `npm run dev --workspace frontend` | Start only the Vite frontend |
+| `npm run build` | Build the frontend assets and executable backend JAR |
+
+### Quality checks
+
+| Command | Purpose |
+| --- | --- |
+| `npm run lint` | Lint the frontend and repository scripts |
+| `npm run typecheck` | Type-check TypeScript and compile Java |
+| `npm test` | Run the complete frontend and backend test suites |
+| `npm run test:frontend` | Run Vitest and Testing Library tests |
+| `npm run test:backend` | Run Maven/JUnit backend tests |
+| `npm run security:check` | Check tracked files for common secret-exposure risks |
+| `npm run verify` | Run the full local quality gate used by CI |
+
+### Database and operations
+
+| Command | Purpose |
+| --- | --- |
 | `npm run db:status` | Show applied and pending Liquibase changesets |
 | `npm run db:migrate` | Apply pending changesets |
-| `npm run db:verify` | Verify migration apply/rollback/reapply using an isolated test DB |
-| `npm run demo:verify` | Verify the disposable demo dataset |
+| `npm run db:rollback:preview` | Preview rollback SQL for the latest changeset |
+| `npm run db:rollback` | Roll back the latest changeset when explicitly enabled |
+| `npm run db:verify` | Test migration apply, rollback, and reapply in isolation |
+| `npm run smtp:check` | Validate SMTP configuration without sending a message |
+| `npm run demo:reset` | Recreate the guarded disposable demonstration dataset |
+| `npm run demo:verify` | Verify the demonstration dataset |
 
 Rollback commands are deliberately guarded. Read `database/migrations/README.md` and
 preview rollback SQL before using them.
@@ -348,7 +420,6 @@ Contribution rules and the Definition of Done are maintained in
 │   ├── src/api/                           Typed API clients
 │   ├── src/                               React features, pages and components
 │   └── vite.config.ts
-├── docs/                                  Security, testing, deployment and handover
 ├── scripts/                               Database, demo, deployment and QA tools
 ├── run.sh                                 macOS/Linux launcher
 ├── run.bat                                Windows launcher
@@ -361,17 +432,20 @@ environment files are excluded from version control.
 
 ## Security model
 
-- Authentication uses BCrypt password hashes and a signed session token in an HTTP-only cookie.
-- Production configuration requires secure cookies and a strong secret supplied outside source control.
-- API endpoints enforce role and ownership rules independently of frontend routing.
-- Request DTOs and service rules validate input, identifiers, statuses and state transitions.
-- SQL access uses prepared statements through Spring JDBC.
-- Unexpected failures return a safe error envelope; internal stack traces are not exposed by the API.
-- Password-reset tokens are time limited and stored independently from user credentials.
-- MySQL must remain private and must never be exposed directly to the public internet.
-
-The approved role-to-endpoint contract is documented in the
-[role-to-endpoint matrix](docs/security/TGMS-80-role-endpoint-matrix.md).
+- Passwords are stored as BCrypt hashes, and authenticated sessions use signed tokens
+  carried in HTTP-only cookies.
+- New customer accounts cannot sign in until their emailed verification code is
+  confirmed.
+- Verification codes are random, short-lived, single-use, attempt-limited,
+  resend-throttled, and stored only as salted SHA-256 hashes.
+- Password-reset tokens are random, time-limited, single-use, stored only as SHA-256
+  hashes, and invalidated together after a successful reset.
+- API endpoints enforce role, ownership, validation, and lifecycle rules independently
+  of frontend routing.
+- SQL access uses prepared statements through Spring JDBC, and unexpected errors use a
+  safe response envelope without exposing stack traces or internal details.
+- Production requires TLS, secure cookies, externally managed secrets, and a private
+  MySQL service that is never exposed directly to the internet.
 
 ## Troubleshooting
 
@@ -385,10 +459,17 @@ Use a hard refresh:
 If necessary, clear the site data for `localhost:5173` in Chrome DevTools →
 **Application** → **Storage**, then reload.
 
+### The launcher says API startup is still in progress
+
+Keep the launcher terminal open. Java may still be compiling or Liquibase may still be
+checking migrations. The frontend starts automatically after the API health endpoint
+returns successfully. A later run is faster because normal development startup is
+incremental.
+
 ### Vite reports `ECONNREFUSED` for `/api/...`
 
-The frontend started before the API became ready, or the backend failed during database
-startup. Wait for `Started TgmsApplication`, then refresh. Check:
+The backend stopped after the frontend had started, or database startup failed. Check
+the API terminal output and verify:
 
 ```bash
 curl http://localhost:3000/api/health
@@ -430,34 +511,59 @@ Reinstall the locked workspace dependencies:
 npm ci
 ```
 
+### Verification or password-reset email does not arrive
+
+Confirm `SMTP_ENABLED=true` in `backend/.env`, not only in the root `.env`, and restart
+the application. With Gmail, use a Google app password and keep `MAIL_FROM` aligned
+with `SMTP_USERNAME`. Check Spam/Junk and the backend terminal for an email-delivery
+error. The verification page can request another code after the configured resend
+delay; the response deliberately does not reveal whether an account exists.
+
+Run `npm run smtp:check`. Gmail response `535` means the configured app password is
+invalid or has been revoked. Generate a new app password while signed in to the same
+Google account as `SMTP_USERNAME`, replace `SMTP_PASSWORD` in `backend/.env` without
+quotes or spaces, rerun the check, and restart the application.
+
 ### Windows blocks `run.bat`
 
 Open Command Prompt in the repository directory and run `run.bat` directly. The batch
 launcher does not require PowerShell execution-policy changes.
 
-## Deployment and supporting documentation
+## Deployment
 
 Production deployment requires TLS, secure cookies, externally supplied secrets, a
 private MySQL service, backups, SPA fallback routing, and an `/api` reverse proxy.
-Validate the production environment before building or deploying:
+No hosting provider is prescribed by the repository. Validate the environment and
+build the release artifacts before deploying:
 
 ```bash
 npm run deploy:env:check
 npm run build
-npm run deploy:verify
 ```
+
+After deployment, run the HTTPS smoke test against the public base URL:
+
+```bash
+TGMS_BASE_URL=https://example.com npm run deploy:smoke
+```
+
+Operational scripts are also available for transaction-consistent MySQL backups and
+guarded restores:
+
+```bash
+npm run db:backup -- backups
+DB_ALLOW_RESTORE=true npm run db:restore -- backups/example.sql.gz --confirm
+```
+
+Restoration changes the configured database. Confirm the target, take a fresh backup,
+and test the procedure in a non-production environment before relying on it.
+
+## Project documentation
 
 | Document | Purpose |
 | --- | --- |
-| [Database migration guide](database/migrations/README.md) | Database workflow, conventions and rollback safety |
-| [Demo-data guide](database/demo/README.md) | Demo identities, reset controls and product media |
-| [Role-to-endpoint matrix](docs/security/TGMS-80-role-endpoint-matrix.md) | Authorization contract |
-| [Cross-module integration](docs/testing/TGMS-81-cross-module-integration.md) | Cross-module integration coverage |
-| [Non-functional verification](docs/testing/TGMS-82-non-functional-verification.md) | Non-functional verification evidence |
-| [User acceptance testing](docs/testing/TGMS-83-user-acceptance-testing.md) | UAT scenarios and outcomes |
-| [Deployment, backup and recovery](docs/deployment/TGMS-84-deployment-backup-recovery.md) | Deployment, backup and recovery runbook |
-| [Demo presentation runbook](docs/demo/TGMS-85-demo-presentation-runbook.md) | Demonstration workflow |
-| [Final handover](docs/handover/TGMS-85-final-handover.md) | Final technical handover |
+| [Contribution guide](CONTRIBUTING.md) | Engineering standards, testing expectations, and Definition of Done |
+| [Database migration guide](database/migrations/README.md) | Schema workflow, conventions, and rollback safety |
+| [Demo-data guide](database/demo/README.md) | Demo identities, reset controls, and product media |
 
-For development standards, testing expectations, API conventions, and review criteria,
-see [CONTRIBUTING.md](CONTRIBUTING.md).
+These documents, together with this README, are the maintained project references.

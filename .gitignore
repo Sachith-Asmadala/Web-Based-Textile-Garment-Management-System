@@ -10,3 +10,4 @@ coverage/
 .classpath
 .project
 .settings/
+backend/data/product-images/
