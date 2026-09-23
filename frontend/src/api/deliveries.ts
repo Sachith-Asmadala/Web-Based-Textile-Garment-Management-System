@@ -7,6 +7,8 @@ export interface DeliveryEligibleOrderItem {
   orderItemId: number;
   productId: number;
   variantId: number;
+  productName?: string;
+  productImageUrl?: string | null;
   quantity: number;
   selectedSize: string;
   selectedColor: string;
@@ -125,6 +127,7 @@ export interface StaffDeliveryOrderItem {
   productId: number;
   variantId: number;
   productName: string;
+  productImageUrl?: string | null;
   quantity: number;
   selectedSize: string;
   selectedColor: string;

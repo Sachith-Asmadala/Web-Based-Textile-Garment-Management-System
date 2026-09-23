@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import jakarta.servlet.http.Cookie;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Map;
@@ -108,6 +109,28 @@ class EmailVerificationApiIntegrationTests {
         confirm("new.customer@example.com", "428196")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("INVALID_EMAIL_VERIFICATION"));
+    }
+
+    @Test
+    void resendAndConfirmRemainPublicWhenBrowserCarriesAnExpiredSessionCookie() throws Exception {
+        registerCustomer("stale-cookie@example.com");
+        long userId = jdbcTemplate.queryForObject(
+                "SELECT id FROM users WHERE email = ?", Long.class, "stale-cookie@example.com");
+        replaceCode(userId, "428196", "abcdef0123456789abcdef0123456789");
+        Cookie staleSession = new Cookie(AuthCookieService.COOKIE_NAME, "expired-or-invalid-token");
+
+        mockMvc.perform(post("/api/auth/email-verification/resend")
+                        .cookie(staleSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"stale-cookie@example.com\"}"))
+                .andExpect(status().isAccepted());
+
+        replaceCode(userId, "428196", "abcdef0123456789abcdef0123456789");
+        mockMvc.perform(post("/api/auth/email-verification/confirm")
+                        .cookie(staleSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"stale-cookie@example.com\",\"code\":\"428196\"}"))
+                .andExpect(status().isOk());
     }
 
     @Test

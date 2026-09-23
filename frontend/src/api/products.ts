@@ -2,20 +2,28 @@ import axios from "axios";
 
 import type {
   GarmentProductDetails,
-  VariantStatus,
+  ProductStatus,
 } from "../products/productTypes";
 import { api } from "./client";
 
 export type CreateProductAvailability = "AVAILABLE" | "UNAVAILABLE";
 
-export interface CreateProductInput {
+export interface ProductDetailsInput {
   name: string;
   category: string;
+  description?: string;
   imageUrl?: string;
+}
+
+export interface ProductVariantInput {
   size: string;
   color: string;
   price: string;
   availability: CreateProductAvailability;
+}
+
+export interface CreateProductInput extends ProductDetailsInput {
+  variants: ProductVariantInput[];
 }
 
 export interface CreateProductResponse {
@@ -23,8 +31,16 @@ export interface CreateProductResponse {
   product: GarmentProductDetails;
 }
 
-export interface UpdateProductInput extends CreateProductInput {
+export interface UpdateProductInput extends ProductDetailsInput, ProductVariantInput {
   variantId: number;
+  status: ProductStatus;
+}
+
+export interface UploadProductImageResponse {
+  message: string;
+  imageUrl: string;
+  mediaType: string;
+  size: number;
 }
 
 export interface UpdateProductResponse {
@@ -32,9 +48,9 @@ export interface UpdateProductResponse {
   product: GarmentProductDetails;
 }
 
-export interface DiscontinueProductResponse {
+export interface DeleteProductResponse {
   message: string;
-  product: GarmentProductDetails;
+  productId: number;
 }
 
 export interface ProductCatalogFilters {
@@ -42,7 +58,11 @@ export interface ProductCatalogFilters {
   category?: string;
   size?: string;
   color?: string;
-  availability?: VariantStatus;
+}
+
+export interface ProductManagementFilters {
+  search?: string;
+  status?: ProductStatus;
 }
 
 interface ProductApiErrorBody {
@@ -67,6 +87,15 @@ export async function createProduct(
   return response.data;
 }
 
+export async function uploadProductImage(
+  imageFile: File,
+): Promise<UploadProductImageResponse> {
+  const data = new FormData();
+  data.append("imageFile", imageFile);
+  const response = await api.post<UploadProductImageResponse>("/products/images", data);
+  return response.data;
+}
+
 export async function getProduct(
   productId: number,
   signal?: AbortSignal,
@@ -83,10 +112,21 @@ export async function updateProduct(
   return response.data;
 }
 
-export async function discontinueProduct(
+export async function deleteProduct(
   productId: number,
-): Promise<DiscontinueProductResponse> {
-  const response = await api.delete<DiscontinueProductResponse>(`/products/${productId}`);
+): Promise<DeleteProductResponse> {
+  const response = await api.delete<DeleteProductResponse>(`/products/${productId}`);
+  return response.data;
+}
+
+export async function getManagedProducts(
+  filters: ProductManagementFilters = {},
+  signal?: AbortSignal,
+): Promise<GarmentProductDetails[]> {
+  const response = await api.get<GarmentProductDetails[]>("/products/manage", {
+    params: filters,
+    signal,
+  });
   return response.data;
 }
 

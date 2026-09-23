@@ -44,6 +44,7 @@ function ProductDetailContent({ productId }: { productId: number }) {
   const [isNotFound, setIsNotFound] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [requestVersion, setRequestVersion] = useState(0);
+  const [selectedVariantId, setSelectedVariantId] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -52,6 +53,9 @@ function ProductDetailContent({ productId }: { productId: number }) {
       .then((catalogProduct) => {
         if (!controller.signal.aborted) {
           setProduct(catalogProduct);
+          setSelectedVariantId(String(
+            catalogProduct.variants.find((variant) => variant.status === "AVAILABLE")?.id ?? "",
+          ));
         }
       })
       .catch((error: unknown) => {
@@ -116,6 +120,11 @@ function ProductDetailContent({ productId }: { productId: number }) {
       </div>
     );
   }
+
+  const availableVariants = product.variants.filter((variant) => variant.status === "AVAILABLE");
+  const selectedVariant = availableVariants.find(
+    (variant) => String(variant.id) === selectedVariantId,
+  );
 
   return (
     <section className="px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
@@ -189,17 +198,36 @@ function ProductDetailContent({ productId }: { productId: number }) {
                       <dd className="mt-1"><StatusBadge label={variant.status.toLowerCase()} status={variant.status} /></dd>
                     </div>
                   </dl>
-                  {user?.role === "CUSTOMER" && variant.status === "AVAILABLE" ? (
-                    <Link
-                      className="mt-4 inline-flex w-full justify-center rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover"
-                      to={getCustomerPlaceOrderWithItemPath(product.id, variant.id)}
-                    >
-                      Add to cart
-                    </Link>
-                  ) : null}
                 </li>
               ))}
             </ul>
+
+            {user?.role === "CUSTOMER" && selectedVariant ? (
+              <section className="mt-7 rounded-2xl border border-primary/40 bg-primary-soft p-5" aria-labelledby="product-cart-heading">
+                <h2 className="text-lg font-bold text-foreground" id="product-cart-heading">Add this garment to your order</h2>
+                <label className="mt-4 block text-sm font-semibold text-foreground" htmlFor="detail-cart-variant">
+                  Choose size and colour
+                  <select
+                    className="mt-2 w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    id="detail-cart-variant"
+                    onChange={(event) => setSelectedVariantId(event.target.value)}
+                    value={selectedVariantId}
+                  >
+                    {availableVariants.map((variant) => (
+                      <option key={variant.id} value={variant.id}>
+                        {variant.size} · {variant.color} · LKR {variant.price}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <Link
+                  className="mt-4 inline-flex w-full justify-center rounded-xl bg-primary px-5 py-3 font-semibold text-primary-foreground transition hover:bg-primary-hover sm:w-auto"
+                  to={getCustomerPlaceOrderWithItemPath(product.id, selectedVariant.id)}
+                >
+                  Add to cart
+                </Link>
+              </section>
+            ) : null}
 
             <div className="mt-9 flex flex-wrap gap-3">
               <BackToCatalogLink />

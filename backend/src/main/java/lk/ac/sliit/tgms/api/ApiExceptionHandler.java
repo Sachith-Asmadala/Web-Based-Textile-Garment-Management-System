@@ -7,6 +7,8 @@ import lk.ac.sliit.tgms.admin.AdminUserNotFoundException;
 import lk.ac.sliit.tgms.admin.AdminUserValidationException;
 import lk.ac.sliit.tgms.admin.LastAdministratorException;
 import lk.ac.sliit.tgms.auth.EmailAlreadyRegisteredException;
+import lk.ac.sliit.tgms.auth.EmailNotVerifiedException;
+import lk.ac.sliit.tgms.auth.InvalidEmailVerificationException;
 import lk.ac.sliit.tgms.auth.InvalidCredentialsException;
 import lk.ac.sliit.tgms.auth.InvalidPasswordResetException;
 import lk.ac.sliit.tgms.auth.InvalidSessionException;
@@ -18,7 +20,8 @@ import lk.ac.sliit.tgms.delivery.DeliveryScheduleConflictException;
 import lk.ac.sliit.tgms.delivery.DeliveryStatusTransitionException;
 import lk.ac.sliit.tgms.delivery.DeliveryValidationException;
 import lk.ac.sliit.tgms.inventory.InventoryInsufficientStockException;
-import lk.ac.sliit.tgms.inventory.InventoryMaterialArchivedException;
+import lk.ac.sliit.tgms.inventory.InventoryMaterialInUseException;
+import lk.ac.sliit.tgms.inventory.InventoryMaterialNotFoundException;
 import lk.ac.sliit.tgms.inventory.InventoryMaterialUnavailableException;
 import lk.ac.sliit.tgms.inventory.InventoryMaterialCodeExistsException;
 import lk.ac.sliit.tgms.inventory.InventoryMaterialValidationException;
@@ -39,13 +42,16 @@ import lk.ac.sliit.tgms.quotation.QuotationNotFoundException;
 import lk.ac.sliit.tgms.quotation.QuotationProductNotSelectableException;
 import lk.ac.sliit.tgms.quotation.QuotationValidationException;
 import lk.ac.sliit.tgms.product.InactiveProductCategoryException;
+import lk.ac.sliit.tgms.product.ProductInUseException;
 import lk.ac.sliit.tgms.product.ProductNotFoundException;
 import lk.ac.sliit.tgms.product.ProductNotSelectableException;
 import lk.ac.sliit.tgms.product.ProductValidationException;
+import lk.ac.sliit.tgms.profile.ProfilePasswordValidationException;
 import lk.ac.sliit.tgms.production.ProductionOrderNotEligibleException;
 import lk.ac.sliit.tgms.production.ProductionQualityControlException;
 import lk.ac.sliit.tgms.production.ProductionTaskStartException;
 import lk.ac.sliit.tgms.production.ProductionTaskStatusTransitionException;
+import lk.ac.sliit.tgms.production.ProductionTaskCompletedException;
 import lk.ac.sliit.tgms.production.ProductionTaskStatusValidationException;
 import lk.ac.sliit.tgms.production.ProductionMaterialShortageException;
 import lk.ac.sliit.tgms.production.ProductionTaskValidationException;
@@ -55,7 +61,7 @@ import lk.ac.sliit.tgms.production.ProductionTaskMaterialUsageException;
 import lk.ac.sliit.tgms.search.SharedSearchValidationException;
 import lk.ac.sliit.tgms.report.ReportValidationException;
 import lk.ac.sliit.tgms.supplier.MaterialSupplyCodeExistsException;
-import lk.ac.sliit.tgms.supplier.MaterialSupplyArchivedException;
+import lk.ac.sliit.tgms.supplier.MaterialSupplyInUseException;
 import lk.ac.sliit.tgms.supplier.MaterialSupplyNotFoundException;
 import lk.ac.sliit.tgms.supplier.MaterialSupplyValidationException;
 import lk.ac.sliit.tgms.supplier.SupplierProfileNotFoundException;
@@ -75,6 +81,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -97,6 +104,15 @@ public class ApiExceptionHandler {
     public ResponseEntity<ApiErrorResponse> malformedRequest() {
         return ResponseEntity.badRequest()
                 .body(ApiErrorResponse.of("INVALID_REQUEST", "Request body must be valid JSON."));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiErrorResponse> productImageTooLarge() {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.withFields(
+                        "VALIDATION_ERROR",
+                        "Please correct the highlighted product fields.",
+                        Map.of("imageFile", "Product photos must be 5 MB or smaller.")));
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
@@ -136,11 +152,33 @@ public class ApiExceptionHandler {
                         Map.of("password", exception.getMessage())));
     }
 
+    @ExceptionHandler(ProfilePasswordValidationException.class)
+    public ResponseEntity<ApiErrorResponse> profilePasswordValidation(
+            ProfilePasswordValidationException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.withFields(
+                        "VALIDATION_ERROR", exception.getMessage(), exception.fields()));
+    }
+
     @ExceptionHandler(InvalidPasswordResetException.class)
     public ResponseEntity<ApiErrorResponse> invalidPasswordReset(
             InvalidPasswordResetException exception) {
         return ResponseEntity.badRequest()
                 .body(ApiErrorResponse.of("INVALID_PASSWORD_RESET", exception.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidEmailVerificationException.class)
+    public ResponseEntity<ApiErrorResponse> invalidEmailVerification(
+            InvalidEmailVerificationException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.of("INVALID_EMAIL_VERIFICATION", exception.getMessage()));
+    }
+
+    @ExceptionHandler(EmailNotVerifiedException.class)
+    public ResponseEntity<ApiErrorResponse> emailNotVerified(
+            EmailNotVerifiedException exception) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiErrorResponse.of("EMAIL_NOT_VERIFIED", exception.getMessage()));
     }
 
     @ExceptionHandler(EmailAlreadyRegisteredException.class)
@@ -207,6 +245,12 @@ public class ApiExceptionHandler {
                 .body(ApiErrorResponse.of("PRODUCT_NOT_SELECTABLE", exception.getMessage()));
     }
 
+    @ExceptionHandler(ProductInUseException.class)
+    public ResponseEntity<ApiErrorResponse> productInUse(ProductInUseException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.of("PRODUCT_IN_USE", exception.getMessage()));
+    }
+
     @ExceptionHandler(SupplierProfileValidationException.class)
     public ResponseEntity<ApiErrorResponse> supplierProfileValidation(
             SupplierProfileValidationException exception) {
@@ -247,11 +291,11 @@ public class ApiExceptionHandler {
                 .body(ApiErrorResponse.of("MATERIAL_SUPPLY_NOT_FOUND", exception.getMessage()));
     }
 
-    @ExceptionHandler(MaterialSupplyArchivedException.class)
-    public ResponseEntity<ApiErrorResponse> materialSupplyArchived(
-            MaterialSupplyArchivedException exception) {
+    @ExceptionHandler(MaterialSupplyInUseException.class)
+    public ResponseEntity<ApiErrorResponse> materialSupplyInUse(
+            MaterialSupplyInUseException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ApiErrorResponse.of("MATERIAL_SUPPLY_ARCHIVED", exception.getMessage()));
+                .body(ApiErrorResponse.of("SUPPLY_IN_USE", exception.getMessage()));
     }
 
     @ExceptionHandler(InventoryMaterialValidationException.class)
@@ -282,11 +326,18 @@ public class ApiExceptionHandler {
                         Map.of("quantity", exception.getMessage())));
     }
 
-    @ExceptionHandler(InventoryMaterialArchivedException.class)
-    public ResponseEntity<ApiErrorResponse> inventoryMaterialArchived(
-            InventoryMaterialArchivedException exception) {
+    @ExceptionHandler(InventoryMaterialInUseException.class)
+    public ResponseEntity<ApiErrorResponse> inventoryMaterialInUse(
+            InventoryMaterialInUseException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ApiErrorResponse.of("INVENTORY_MATERIAL_ARCHIVED", exception.getMessage()));
+                .body(ApiErrorResponse.of("MATERIAL_IN_USE", exception.getMessage()));
+    }
+
+    @ExceptionHandler(InventoryMaterialNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> inventoryMaterialNotFound(
+            InventoryMaterialNotFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiErrorResponse.of("INVENTORY_MATERIAL_NOT_FOUND", exception.getMessage()));
     }
 
     @ExceptionHandler(InventoryMaterialUnavailableException.class)
@@ -549,6 +600,13 @@ public class ApiExceptionHandler {
                         "PRODUCTION_MATERIAL_REQUIREMENTS_LOCKED",
                         exception.getMessage(),
                         exception.fields()));
+    }
+
+    @ExceptionHandler(ProductionTaskCompletedException.class)
+    public ResponseEntity<ApiErrorResponse> productionTaskCompleted(
+            ProductionTaskCompletedException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.of("PRODUCTION_TASK_COMPLETED", exception.getMessage()));
     }
 
     @ExceptionHandler(QuotationValidationException.class)

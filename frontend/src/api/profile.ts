@@ -7,6 +7,15 @@ export interface ProfileInput {
   fullName: string;
 }
 
+export interface ChangePasswordInput {
+  currentPassword: string;
+  newPassword: string;
+}
+
+interface MessageResponse {
+  message: string;
+}
+
 interface ProfileApiErrorBody {
   error?: {
     code?: string;
@@ -29,6 +38,11 @@ export async function getProfile(signal?: AbortSignal): Promise<AuthUser> {
 export async function updateProfile(input: ProfileInput): Promise<AuthUser> {
   const response = await api.put<AuthUser>("/profile", input);
   return response.data;
+}
+
+export async function changePassword(input: ChangePasswordInput): Promise<string> {
+  const response = await api.put<MessageResponse>("/profile/password", input);
+  return response.data.message;
 }
 
 export function getProfileApiError(error: unknown, fallback: string): ProfileApiError {

@@ -74,12 +74,14 @@ export function CustomerPlaceOrderPage() {
   const [savedOrder, setSavedOrder] = useState<CreateOrderResponse | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cartMessage, setCartMessage] = useState<string | null>(null);
+  const [isDownloadingReceipt, setIsDownloadingReceipt] = useState(false);
+  const [receiptDownloadError, setReceiptDownloadError] = useState<string | null>(null);
 
   async function loadProducts(signal?: AbortSignal) {
     setIsLoading(true);
     setLoadError(null);
     try {
-      setProducts(await getCatalogProducts({ availability: "AVAILABLE" }, signal));
+      setProducts(await getCatalogProducts({}, signal));
     } catch (error: unknown) {
       if (signal?.aborted) return;
       setLoadError(getProductApiError(
@@ -215,6 +217,21 @@ export function CustomerPlaceOrderPage() {
     setValidationError(null);
     setFieldErrors({});
     setCartMessage(null);
+    setReceiptDownloadError(null);
+  }
+
+  async function downloadReceipt() {
+    if (!savedOrder) return;
+    setIsDownloadingReceipt(true);
+    setReceiptDownloadError(null);
+    try {
+      const { downloadOrderReceipt } = await import("./orderReceiptPdf");
+      await downloadOrderReceipt(savedOrder);
+    } catch {
+      setReceiptDownloadError("The receipt PDF could not be prepared. Please try again.");
+    } finally {
+      setIsDownloadingReceipt(false);
+    }
   }
 
   if (isLoading) {
@@ -260,26 +277,24 @@ export function CustomerPlaceOrderPage() {
   }
 
   if (savedOrder) {
-    const orderTotal = savedOrder.items.reduce<bigint | null>((total, item) => {
-      const lineTotal = moneyTotal(item.unitPriceSnapshot, item.quantity);
-      return total === null || lineTotal === null ? null : total + lineTotal;
-    }, 0n);
-
     return (
       <section className="px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
         <div className="mx-auto max-w-4xl rounded-3xl border border-success-border bg-success-soft p-7 sm:p-10">
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-success">
-            Order placed
+            Order recorded
           </p>
-          <h1 className="mt-3 text-3xl font-bold text-foreground">{savedOrder.orderNumber}</h1>
+          <h1 className="mt-3 text-3xl font-bold text-foreground">Order confirmed</h1>
           <p aria-live="polite" className="mt-3 text-success">
-            Your order was created successfully for {savedOrder.customer.fullName}.
+            Your order was recorded successfully for {savedOrder.customer.fullName}. Confirmation code: <strong>{savedOrder.orderNumber}</strong>.
+          </p>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            This confirms submission of the order. Its fulfilment status remains {savedOrder.status.toLowerCase()} until the responsible team records the next workflow step.
           </p>
           <dl className="mt-7 grid gap-4 rounded-2xl border border-success-border bg-background/60 p-5 sm:grid-cols-2 lg:grid-cols-4">
-            <div><dt className="text-xs uppercase text-muted">Order ID</dt><dd className="mt-1 font-semibold text-foreground">{savedOrder.id}</dd></div>
+            <div><dt className="text-xs uppercase text-muted">Confirmation code</dt><dd className="mt-1 break-all font-semibold text-foreground">{savedOrder.orderNumber}</dd></div>
             <div><dt className="text-xs uppercase text-muted">Status</dt><dd className="mt-1"><StatusBadge status={savedOrder.status} /></dd></div>
             <div><dt className="text-xs uppercase text-muted">Items</dt><dd className="mt-1 font-semibold text-foreground">{savedOrder.items.length}</dd></div>
-            <div><dt className="text-xs uppercase text-muted">Order total</dt><dd className="mt-1 font-semibold text-foreground">{formatMoney(orderTotal)}</dd></div>
+            <div><dt className="text-xs uppercase text-muted">Order total</dt><dd className="mt-1 font-semibold text-foreground">LKR {savedOrder.totalAmount}</dd></div>
           </dl>
 
           <h2 className="mt-8 text-xl font-bold text-foreground">Items you selected</h2>
@@ -305,20 +320,31 @@ export function CustomerPlaceOrderPage() {
                       <div><dt className="text-muted">Unit price</dt><dd className="mt-1 font-semibold text-foreground">LKR {item.unitPriceSnapshot}</dd></div>
                     </dl>
                     <p className="mt-4 border-t border-border pt-3 text-sm text-muted">
-                      Line total: <strong className="text-foreground">{formatMoney(moneyTotal(item.unitPriceSnapshot, item.quantity))}</strong>
+                      Line total: <strong className="text-foreground">LKR {item.lineTotal}</strong>
                     </p>
                   </div>
                 </article>
               );
             })}
           </div>
-          <button
-            className="mt-8 rounded-xl bg-primary px-5 py-3 font-semibold text-primary-foreground transition hover:bg-primary-hover"
-            onClick={resetForm}
-            type="button"
-          >
-            Place another order
-          </button>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <button
+              className="rounded-xl bg-primary px-5 py-3 font-semibold text-primary-foreground transition hover:bg-primary-hover disabled:cursor-wait disabled:opacity-60"
+              disabled={isDownloadingReceipt}
+              onClick={() => void downloadReceipt()}
+              type="button"
+            >
+              {isDownloadingReceipt ? "Preparing PDF…" : "Download receipt (PDF)"}
+            </button>
+            <button
+              className="rounded-xl border border-border px-5 py-3 font-semibold text-foreground transition hover:border-primary"
+              onClick={resetForm}
+              type="button"
+            >
+              Place another order
+            </button>
+          </div>
+          {receiptDownloadError ? <p className="mt-4 text-sm text-danger" role="alert">{receiptDownloadError}</p> : null}
         </div>
       </section>
     );

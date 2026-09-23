@@ -6,10 +6,11 @@ import { useReducedMotion } from "./useReducedMotion";
 export function Reveal({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   const elementRef = useRef<HTMLDivElement>(null);
   const prefersReducedMotion = useReducedMotion();
-  const [isVisible, setIsVisible] = useState(prefersReducedMotion);
+  const canObserve = typeof IntersectionObserver !== "undefined";
+  const [isVisible, setIsVisible] = useState(prefersReducedMotion || !canObserve);
 
   useEffect(() => {
-    if (prefersReducedMotion || typeof IntersectionObserver === "undefined") {
+    if (prefersReducedMotion || !canObserve) {
       setIsVisible(true);
       return undefined;
     }
@@ -27,7 +28,7 @@ export function Reveal({ className, ...props }: HTMLAttributes<HTMLDivElement>) 
     );
     observer.observe(element);
     return () => observer.disconnect();
-  }, [prefersReducedMotion]);
+  }, [canObserve, prefersReducedMotion]);
 
   return (
     <div

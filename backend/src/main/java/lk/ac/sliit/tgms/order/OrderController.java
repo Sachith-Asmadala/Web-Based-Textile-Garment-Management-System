@@ -1,5 +1,6 @@
 package lk.ac.sliit.tgms.order;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import lk.ac.sliit.tgms.auth.InvalidSessionException;
@@ -53,7 +54,7 @@ public class OrderController {
     @GetMapping("/{orderId}")
     @OrderStaffReadable
     public OrderDetailResponse order(@PathVariable long orderId) {
-        return OrderDetailResponse.from(orderService.getStaffOrder(orderId));
+        return OrderDetailResponse.forStaff(orderService.getStaffOrder(orderId));
     }
 
     @GetMapping("/{orderId}/billing")
@@ -107,7 +108,7 @@ public class OrderController {
                 orderId,
                 request == null ? null : request.status());
         return new OrderStatusUpdateResponse(
-                "Order status updated successfully.", OrderDetailResponse.from(updated));
+                "Order status updated successfully.", OrderDetailResponse.forStaff(updated));
     }
 
     @GetMapping("/mine")
@@ -123,7 +124,7 @@ public class OrderController {
     public OrderDetailResponse myOrder(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable long orderId) {
-        return OrderDetailResponse.from(
+        return OrderDetailResponse.forCustomer(
                 orderService.getCustomerOrder(authenticatedUserId(jwt), orderId));
     }
 
@@ -304,12 +305,15 @@ public class OrderController {
             long productId,
             long variantId,
             int quantity,
+            String productName,
+            String productImageUrl,
             String selectedSize,
             String selectedColor) {
 
         static OrderHandoffItemResponse from(OrderHandoffItem item) {
             return new OrderHandoffItemResponse(
                     item.orderItemId(), item.productId(), item.variantId(), item.quantity(),
+                    item.productName(), item.productImageUrl(),
                     item.selectedSize(), item.selectedColor());
         }
     }
@@ -330,6 +334,8 @@ public class OrderController {
             Instant createdAt,
             Instant updatedAt,
             int itemCount,
+            String previewProductName,
+            String previewProductImageUrl,
             String totalAmount) {
 
         static OrderSummaryResponse from(OrderSummary order) {
@@ -343,6 +349,8 @@ public class OrderController {
                     order.createdAt(),
                     order.updatedAt(),
                     order.itemCount(),
+                    order.previewProductName(),
+                    order.previewProductImageUrl(),
                     order.totalAmount().toPlainString());
         }
     }
@@ -361,7 +369,16 @@ public class OrderController {
             List<OrderStatus> allowedStatusTransitions,
             List<OrderStatusHistoryResponse> statusHistory) {
 
-        static OrderDetailResponse from(OrderDetail order) {
+        static OrderDetailResponse forStaff(OrderDetail order) {
+            return from(order, OrderStatusLifecycle.allowedStaffTransitions(order.status()));
+        }
+
+        static OrderDetailResponse forCustomer(OrderDetail order) {
+            return from(order, List.of());
+        }
+
+        private static OrderDetailResponse from(
+                OrderDetail order, List<OrderStatus> allowedStatusTransitions) {
             return new OrderDetailResponse(
                     order.id(),
                     order.orderNumber(),
@@ -373,7 +390,7 @@ public class OrderController {
                     order.updatedAt(),
                     order.items().stream().map(OrderDetailItemResponse::from).toList(),
                     order.totalAmount().toPlainString(),
-                    OrderStatusLifecycle.allowedTransitions(order.status()),
+                    allowedStatusTransitions,
                     order.statusHistory().stream().map(OrderStatusHistoryResponse::from).toList());
         }
     }
@@ -420,6 +437,7 @@ public class OrderController {
             long productId,
             long variantId,
             String productName,
+            String productImageUrl,
             int quantity,
             String selectedSize,
             String selectedColor,
@@ -432,6 +450,7 @@ public class OrderController {
                     item.productId(),
                     item.variantId(),
                     item.productName(),
+                    item.productImageUrl(),
                     item.quantity(),
                     item.selectedSize(),
                     item.selectedColor(),
@@ -448,10 +467,15 @@ public class OrderController {
             CustomerResponse customer,
             OrderStatus status,
             Instant createdAt,
+            String totalAmount,
             List<OrderItemResponse> items) {
 
         static CreateOrderResponse from(CreatedCustomerOrder created) {
             CustomerOrder order = created.order();
+            BigDecimal totalAmount = created.items().stream()
+                    .map(createdItem -> createdItem.item().unitPriceSnapshot().multiply(
+                            BigDecimal.valueOf(createdItem.item().quantity())))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
             return new CreateOrderResponse(
                     "Customer order created successfully.",
                     order.id(),
@@ -460,6 +484,7 @@ public class OrderController {
                     CustomerResponse.from(created.customer()),
                     order.status(),
                     order.createdAt(),
+                    totalAmount.toPlainString(),
                     created.items().stream().map(OrderItemResponse::from).toList());
         }
     }
@@ -472,7 +497,8 @@ public class OrderController {
             int quantity,
             String selectedSize,
             String selectedColor,
-            String unitPriceSnapshot) {
+            String unitPriceSnapshot,
+            String lineTotal) {
 
         static OrderItemResponse from(CreatedOrderItem createdItem) {
             CustomerOrderItem item = createdItem.item();
@@ -484,7 +510,9 @@ public class OrderController {
                     item.quantity(),
                     item.selectedSize(),
                     item.selectedColor(),
-                    item.unitPriceSnapshot().toPlainString());
+                    item.unitPriceSnapshot().toPlainString(),
+                    item.unitPriceSnapshot().multiply(BigDecimal.valueOf(item.quantity()))
+                            .toPlainString());
         }
     }
 }

@@ -7,8 +7,8 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 const backendEnvironment = path.join(projectRoot, "backend", ".env");
 const isWindows = process.platform === "win32";
 const npmCommand = isWindows ? "npm.cmd" : "npm";
-const startupTimeoutMs = 120_000;
 const pollIntervalMs = 300;
+const progressIntervalMs = 15_000;
 
 function configuredPort() {
   if (process.env.PORT) {
@@ -24,12 +24,12 @@ function configuredPort() {
 }
 
 const healthUrl = `http://127.0.0.1:${configuredPort()}/api/health`;
-const deadline = Date.now() + startupTimeoutMs;
 let apiReady = false;
+let nextProgressAt = Date.now() + progressIntervalMs;
 
 console.log(`[TGMS] Waiting for the API at ${healthUrl}...`);
 
-while (Date.now() < deadline) {
+while (!apiReady) {
   try {
     const response = await fetch(healthUrl, { signal: AbortSignal.timeout(2_000) });
     if (response.ok) {
@@ -39,12 +39,11 @@ while (Date.now() < deadline) {
   } catch {
     // The backend is still compiling, migrating, or opening its HTTP port.
   }
+  if (!apiReady && Date.now() >= nextProgressAt) {
+    console.log("[TGMS] API startup is still in progress; continuing to wait...");
+    nextProgressAt = Date.now() + progressIntervalMs;
+  }
   await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-}
-
-if (!apiReady) {
-  console.error(`[TGMS] API did not become ready within ${startupTimeoutMs / 1000} seconds.`);
-  process.exit(1);
 }
 
 console.log("[TGMS] API is ready. Starting Vite...");
@@ -52,6 +51,7 @@ console.log("[TGMS] API is ready. Starting Vite...");
 const child = spawn(npmCommand, ["run", "dev", "--workspace", "frontend"], {
   cwd: projectRoot,
   env: process.env,
+  detached: !isWindows,
   shell: isWindows,
   stdio: "inherit",
 });
@@ -63,6 +63,14 @@ function stop(signal) {
     return;
   }
   stopping = true;
+  if (!isWindows && child.pid) {
+    try {
+      process.kill(-child.pid, signal);
+      return;
+    } catch {
+      // Fall back to signaling the direct child below.
+    }
+  }
   child.kill(signal);
 }
 

@@ -9,7 +9,7 @@ import {
   type RoleAccessResponse,
 } from "../api/roleAccess";
 import { ErrorState, LoadingState } from "../components/AppStates";
-import { StarsBackground } from "../components/StarsBackground";
+import { WorkspaceBackground } from "../components/WorkspaceBackground";
 import { useAuth } from "./useAuth";
 
 function StatePage({
@@ -24,7 +24,7 @@ function StatePage({
   action?: React.ReactNode;
 }) {
   return (
-    <StarsBackground className="min-h-screen">
+    <WorkspaceBackground className="min-h-screen">
       <main className="flex min-h-screen items-center justify-center px-6 py-12 text-foreground">
         <section className="w-full max-w-xl rounded-3xl border border-border bg-surface/95 p-8 shadow-2xl shadow-black/30 backdrop-blur-md sm:p-12">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">
@@ -43,7 +43,7 @@ function StatePage({
           </div>
         </section>
       </main>
-    </StarsBackground>
+    </WorkspaceBackground>
   );
 }
 

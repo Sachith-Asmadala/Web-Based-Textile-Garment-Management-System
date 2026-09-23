@@ -365,9 +365,10 @@ class DeliveryScheduleApiIntegrationTests {
         jdbcTemplate.update(
                 """
                 INSERT INTO order_items (
-                    id, order_id, product_id, variant_id, quantity,
+                    id, order_id, product_id, variant_id, product_name_snapshot,
+                    product_image_url_snapshot, quantity,
                     selected_size, selected_color, unit_price_snapshot
-                ) VALUES (?, ?, 9642, 9643, 2, 'M', 'Blue', 2500.00)
+                ) VALUES (?, ?, 9642, 9643, 'Delivery schedule product', NULL, 2, 'M', 'Blue', 2500.00)
                 """,
                 itemId, orderId);
     }

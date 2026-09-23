@@ -24,7 +24,14 @@ class SecurityArchitectureTests {
 
     private static final Map<Class<?>, Set<String>> REVIEWED_UNGUARDED_SELF_SERVICE = Map.of(
             AuthController.class,
-                    Set.of("register", "login", "logout", "requestPasswordReset", "confirmPasswordReset"),
+                    Set.of(
+                            "register",
+                            "login",
+                            "logout",
+                            "requestPasswordReset",
+                            "confirmPasswordReset",
+                            "resendEmailVerification",
+                            "confirmEmailVerification"),
             UserProfileController.class,
                     Set.of("updateProfile"),
             NotificationController.class,

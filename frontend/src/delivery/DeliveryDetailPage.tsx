@@ -15,6 +15,7 @@ import {
   deliveryOrderSelectionPagePath,
   deliveryRecordsPagePath,
 } from "../navigation/navigation";
+import { ProductImage } from "../products/ProductImage";
 
 function formatDateTime(value: string) {
   const date = new Date(value);
@@ -131,10 +132,18 @@ export function DeliveryDetailPage() {
           <h2 className="text-lg font-bold text-foreground">Ordered items</h2>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {record.items.map((item) => (
-              <div className="rounded-xl border border-border p-4" key={item.orderItemId}>
-                <p className="font-semibold text-foreground">{item.productName}</p>
-                <p className="mt-1 text-sm text-muted">Product #{item.productId} · Variant #{item.variantId}</p>
-                <p className="mt-1 text-sm text-foreground-muted">{item.selectedSize} · {item.selectedColor} · Quantity {item.quantity}</p>
+              <div className="flex gap-4 rounded-xl border border-border p-4" key={item.orderItemId}>
+                <ProductImage
+                  alt={`${item.productName} ordered garment`}
+                  className="h-20 w-20 shrink-0 rounded-xl border border-border"
+                  productName={item.productName}
+                  src={item.productImageUrl}
+                />
+                <div className="min-w-0">
+                  <p className="font-semibold text-foreground">{item.productName}</p>
+                  <p className="mt-1 text-sm text-muted">Product #{item.productId} · Variant #{item.variantId}</p>
+                  <p className="mt-1 text-sm text-foreground-muted">{item.selectedSize} · {item.selectedColor} · Quantity {item.quantity}</p>
+                </div>
               </div>
             ))}
           </div>

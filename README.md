@@ -17,9 +17,14 @@ business. It brings product cataloguing, supplier coordination, material invento
 customer orders, quotations, billing, production, quality control, delivery,
 notifications, reporting, and role-based administration into one system of record.
 
+Repository: <https://github.com/IT24100351/Web-based-textile-and-garment-management-system.git>
+
 ## Contents
 
+- [Project team and responsibilities](#project-team-and-responsibilities)
 - [Core capabilities](#core-capabilities)
+- [Business workflow](#business-workflow)
+- [Application roles](#application-roles)
 - [Architecture](#architecture)
 - [Technology stack](#technology-stack)
 - [Prerequisites](#prerequisites)
@@ -34,6 +39,17 @@ notifications, reporting, and role-based administration into one system of recor
 - [Troubleshooting](#troubleshooting)
 - [Deployment](#deployment)
 - [Project documentation](#project-documentation)
+
+## Project team and responsibilities
+
+| Member | IT No. | Major function | Scrum role | Receives data from | Hands data/work to |
+| --- | --- | --- | --- | --- | --- |
+| Nimsara V.G.P | IT25101310 | Order Management | Product Owner | Customer and Product modules | Production, Delivery, Customer tracking/reporting |
+| Basnagoda B.L.K | IT25102148 | Fabric Inventory | Scrum Master | Supplier supply data | Production material availability/consumption |
+| Gunarathna P.G.S.C | IT25103068 | Delivery Management | Developer | Order after Production marks ready | Order completion and Customer tracking |
+| Ketipearachchi R.P | IT25100244 | Supplier Management | Developer | Supplier's own input | Inventory context/source records |
+| Gunathilaka N.T.D.S | IT25102427 | Garment Product Management | Developer | Sales/product definition | Customer catalogue and Order item selection |
+| Dilwan A.W.W.A.S | IT24100351 | Production Management | Developer | Confirmed Order and Inventory | Ready-for-delivery Order |
 
 ## Core capabilities
 
@@ -52,6 +68,48 @@ notifications, reporting, and role-based administration into one system of recor
 The supported roles are `ADMINISTRATOR`, `SUPPLIER`, `INVENTORY_MANAGER`,
 `PRODUCTION_MANAGER`, `SALES_OFFICER`, and `CUSTOMER`. The API enforces permissions;
 hiding a route or navigation item in React is only an additional user-interface guard.
+
+## Business workflow
+
+The system is built around a controlled handoff from one module to the next. Each
+handoff stores the authoritative state in the backend and shows the correct next step
+to the role responsible for that stage.
+
+```text
+Garment Product Management
+  -> Customer catalogue
+  -> Customer places order
+  -> Sales Officer confirms order
+  -> Production Manager creates and starts production
+  -> Inventory Manager receives/releases materials as needed
+  -> Production Manager records material usage and quality control
+  -> Production Manager marks production completed
+  -> Order becomes READY_FOR_DELIVERY, shown as "Completed Preparation"
+  -> Sales Officer prepares/schedules delivery
+  -> Delivery progresses to delivered
+  -> Order becomes COMPLETED for customer tracking/reporting
+```
+
+Important status handoffs:
+
+| Handoff | System status | User-facing meaning |
+| --- | --- | --- |
+| Sales confirms order | `CONFIRMED` | Order is approved for Production Management |
+| Production starts | `IN_PRODUCTION` | Order is being manufactured |
+| Production completes | `READY_FOR_DELIVERY` | Shown as `Completed Preparation`; Sales can prepare delivery |
+| Delivery delivered | `COMPLETED` | Customer order is fully completed |
+| Cancellation | `CANCELLED` | Order or delivery flow has been stopped safely |
+
+## Application roles
+
+| Role | Main pages | Responsibility |
+| --- | --- | --- |
+| `CUSTOMER` | Product catalogue, place order, order history, order tracking | Browse products, place orders, and track order/delivery progress |
+| `SALES_OFFICER` | Customer orders, create customer order, quotations, prepare delivery, delivery records | Confirm orders, manage sales documents, schedule delivery after production |
+| `PRODUCTION_MANAGER` | Create production task, production records, production task detail | Start production, record material usage, perform quality control, complete production |
+| `INVENTORY_MANAGER` | Material supplies, inventory materials, add inventory material | Link supplier supplies, receive stock, monitor/release material availability |
+| `SUPPLIER` | Supplier profile, material supplies | Maintain supplier business details and available material supply records |
+| `ADMINISTRATOR` | Authorization check, user administration, shared search/report access | Manage internal access and verify secured system boundaries |
 
 ## Architecture
 
@@ -92,7 +150,7 @@ identifiers, server-side authorization, and validated state transitions.
 
 Install these tools before running the project:
 
-- Node.js 20.19 or newer
+- Node.js 22.22.2+, 24.15.0+, or 26+ (required by the locked jsdom test environment; `.nvmrc` pins 24.15.0)
 - npm 11 or a compatible version
 - Java Development Kit 17 or newer
 - MySQL 8 or newer
@@ -110,17 +168,40 @@ mysql --version
 The repository includes Maven wrappers for both Unix (`backend/mvnw`) and Windows
 (`backend/mvnw.cmd`), so a separate Maven installation is unnecessary.
 
+## CRUD deletion and operational statuses
+
+TGMS treats deletion as CRUD and statuses as business state:
+
+- **Inventory Material** supports safe hard Delete. An unused record is physically deleted.
+  A material referenced by Production is protected and returns `409 MATERIAL_IN_USE`.
+- **Material Supply** supports safe hard Delete for the owning Supplier. An unused supply is
+  physically deleted; a supply referenced by Inventory returns `409 SUPPLY_IN_USE`. Suppliers
+  can use `ACTIVE` / `INACTIVE` to control operational availability without faking deletion.
+- **Product** supports safe hard Delete for Sales Officers. An unused Product and its owned
+  variants are physically deleted; a Product referenced by an Order or Quotation returns
+  `409 PRODUCT_IN_USE`. Historical transactional rows are never cascade-deleted.
+
+`ACTIVE` / `INACTIVE` describe current operational availability and are not fake deletion.
+Product variants use `AVAILABLE` / `UNAVAILABLE`. `DISCONTINUED` is a legacy migration-only
+value and is not part of current Inventory, Material Supply, Product, or Product Variant CRUD
+contracts. Public `/products` remains sellable-only, while Sales Officers use the protected
+`/products/manage` workspace to find and maintain inactive Products and unavailable variants.
+
+The legacy cleanup migrations for these former `DISCONTINUED` states are destructive and
+forward-only. They preserve referenced history but can delete unreferenced legacy rows; rollback
+cannot reconstruct that data. Restore a database backup if pre-cleanup data must be recovered.
+
 ## Quick start
 
 Clone the repository, then run the platform launcher for your operating system. On its
-first run, the launcher creates `backend/.env` and stops so that you can add local
-credentials safely.
+first run, the launcher creates `backend/.env`. The macOS/Linux launcher generates a
+random `JWT_SECRET`; add your local MySQL password before starting the app.
 
 ### macOS or Linux
 
 ```bash
-git clone https://github.com/IT24103430/Web-Based-Textile-Garment-Management-System.git
-cd Web-Based-Textile-Garment-Management-System
+git clone https://github.com/IT24100351/Web-based-textile-and-garment-management-system.git
+cd Web-based-textile-and-garment-management-system
 chmod +x run.sh
 ./run.sh
 ```
@@ -128,8 +209,8 @@ chmod +x run.sh
 ### Windows
 
 ```bat
-git clone https://github.com/IT24103430/Web-Based-Textile-Garment-Management-System.git
-cd Web-Based-Textile-Garment-Management-System
+git clone https://github.com/IT24100351/Web-based-textile-and-garment-management-system.git
+cd Web-based-textile-and-garment-management-system
 run.bat
 ```
 
@@ -143,9 +224,9 @@ On the first launch, the script:
 6. starts the frontend after the API health check succeeds.
 
 Before running the launcher again, create the local database as described in
-[Database setup](#database-setup), then set `DB_PASSWORD` and `JWT_SECRET` in
-`backend/.env`. Spring Boot applies pending Liquibase migrations automatically during
-API startup.
+[Database setup](#database-setup), then set `DB_PASSWORD` in `backend/.env`.
+On Windows, also set `JWT_SECRET` to a random value of at least 32 bytes.
+Spring Boot applies pending Liquibase migrations automatically during API startup.
 
 Use validation-only mode to check a machine without starting servers:
 
@@ -374,7 +455,7 @@ Run commands from the repository root unless stated otherwise.
 | `npm run db:migrate` | Apply pending changesets |
 | `npm run db:rollback:preview` | Preview rollback SQL for the latest changeset |
 | `npm run db:rollback` | Roll back the latest changeset when explicitly enabled |
-| `npm run db:verify` | Test migration apply, rollback, and reapply in isolation |
+| `npm run db:verify` | Apply the migration chain and run schema plus legacy-data migration verification |
 | `npm run smtp:check` | Validate SMTP configuration without sending a message |
 | `npm run demo:reset` | Recreate the guarded disposable demonstration dataset |
 | `npm run demo:verify` | Verify the demonstration dataset |

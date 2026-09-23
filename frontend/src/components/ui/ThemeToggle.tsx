@@ -28,7 +28,7 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
           aria-label={label}
           aria-pressed={preference === option}
           className={cn(
-            "group grid h-8 place-items-center rounded-lg text-muted transition duration-150 ease-[var(--ease-standard)] hover:text-foreground active:scale-[0.94]",
+            "group grid h-8 place-items-center rounded-lg text-muted transition duration-[var(--motion-fast)] ease-[var(--ease-standard)] hover:text-foreground active:scale-[0.96]",
             compact ? "w-8" : "w-9",
             preference === option && "bg-surface-elevated text-primary shadow-sm",
           )}
@@ -37,7 +37,7 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
           title={label}
           type="button"
         >
-          <Icon aria-hidden="true" className={cn("h-4 w-4 transition duration-[180ms] ease-[var(--ease-emphasized)]", preference === option && "rotate-0 scale-105", preference !== option && "-rotate-12 scale-95")} />
+          <Icon aria-hidden="true" className={cn("theme-toggle-icon h-4 w-4 transition-transform duration-[var(--motion-normal)] ease-[var(--ease-emphasized)]", preference === option && "rotate-0 scale-105", preference !== option && "-rotate-12 scale-95")} />
         </button>
       ))}
     </div>

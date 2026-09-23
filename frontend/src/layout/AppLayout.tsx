@@ -20,17 +20,22 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
+import {
+  getNotifications,
+  NOTIFICATIONS_CHANGED_EVENT,
+} from "../api/notifications";
 import { useAuth } from "../auth/useAuth";
 import { BrandIdentity } from "../components/BrandLogo";
-import { StarsBackground } from "../components/StarsBackground";
+import { WorkspaceBackground } from "../components/WorkspaceBackground";
 import { Button } from "../components/ui/Button";
 import { buttonStyles } from "../components/ui/buttonStyles";
 import { ThemeToggle } from "../components/ui/ThemeToggle";
 import { cn } from "../components/ui/cn";
 import { MotionPage } from "../motion/MotionPage";
+import { usePresence } from "../motion/usePresence";
 import { getNavigationItems, roleLabels, type NavigationItem } from "../navigation/navigation";
 
 type NavigationGroup = "Overview" | "Operations" | "Management";
@@ -73,8 +78,73 @@ function navigationIcon(item: NavigationItem): LucideIcon {
 
 function Logo({ compact = false }: { compact?: boolean }) {
   return (
-    <Link aria-label="LankaWear Apparel home" className="group min-w-0" to="/">
-      <BrandIdentity className="transition group-hover:-translate-y-0.5" compact={compact} responsive />
+    <Link aria-label="LankaWear Apparel home" className="min-w-0" to="/">
+      <BrandIdentity compact={compact} responsive />
+    </Link>
+  );
+}
+
+function NotificationBellLink({ refreshKey }: { refreshKey: string }) {
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const refreshUnreadCount = useCallback((signal?: AbortSignal) => {
+    void getNotifications(true, signal)
+      .then((inbox) => {
+        if (!signal?.aborted) {
+          setUnreadCount(Math.max(0, inbox.unreadCount));
+        }
+      })
+      .catch(() => {
+        // Keep the workspace usable when notification refresh is temporarily unavailable.
+      });
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    refreshUnreadCount(controller.signal);
+
+    const handleNotificationsChanged = () => refreshUnreadCount();
+    const handleFocus = () => refreshUnreadCount();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshUnreadCount();
+      }
+    };
+    const intervalId = window.setInterval(refreshUnreadCount, 60_000);
+
+    window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, handleNotificationsChanged);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      controller.abort();
+      window.clearInterval(intervalId);
+      window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, handleNotificationsChanged);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [refreshKey, refreshUnreadCount]);
+
+  const badgeText = unreadCount > 99 ? "99+" : String(unreadCount);
+  const notificationLabel = unreadCount === 0
+    ? "Notifications, no unread notifications"
+    : `Notifications, ${unreadCount} unread`;
+
+  return (
+    <Link
+      aria-label={notificationLabel}
+      className={cn(buttonStyles({ size: "icon", variant: "ghost" }), "relative overflow-visible")}
+      to="/notifications"
+    >
+      <Bell aria-hidden="true" className="h-[1.15rem] w-[1.15rem]" />
+      {unreadCount > 0 ? (
+        <span
+          aria-hidden="true"
+          className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full border-2 border-background bg-danger px-1 text-[0.625rem] font-extrabold leading-none text-white shadow-sm"
+        >
+          {badgeText}
+        </span>
+      ) : null}
     </Link>
   );
 }
@@ -87,9 +157,9 @@ function RouteCanvas({ pathname }: { pathname: string }) {
   }
 
   return (
-    <StarsBackground className="min-h-[calc(100svh-4.5rem)]">
+    <WorkspaceBackground className="min-h-[calc(100svh-4.5rem)]">
       {page}
-    </StarsBackground>
+    </WorkspaceBackground>
   );
 }
 
@@ -116,7 +186,7 @@ function NavigationLinks({
                 return (
                   <NavLink
                     className={({ isActive }) => cn(
-                      "group relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition",
+                      "relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition",
                       isActive
                         ? "bg-primary-soft text-primary"
                         : "text-foreground-muted hover:bg-surface-muted hover:text-foreground",
@@ -130,10 +200,10 @@ function NavigationLinks({
                     {({ isActive }) => (
                       <>
                         <span className={cn(
-                          "absolute inset-y-2 left-0 w-0.5 origin-center scale-y-50 rounded-full bg-primary opacity-0 transition duration-[180ms] ease-[var(--ease-emphasized)]",
+                          "absolute inset-y-2 left-0 w-0.5 origin-center scale-y-50 rounded-full bg-primary opacity-0 transition duration-[var(--motion-normal)] ease-[var(--ease-emphasized)]",
                           isActive && "scale-y-100 opacity-100",
                         )} />
-                        <Icon aria-hidden="true" className="h-[1.1rem] w-[1.1rem] shrink-0 transition-transform duration-150 group-hover:translate-x-0.5" />
+                        <Icon aria-hidden="true" className="h-[1.1rem] w-[1.1rem] shrink-0" />
                         <span>{item.label}</span>
                       </>
                     )}
@@ -152,7 +222,23 @@ function PublicShell() {
   const { user, isLoading } = useAuth();
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuPresence = usePresence(isMenuOpen);
   const items = getNavigationItems(user);
+
+  useEffect(() => {
+    setIsMenuOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!isMenuOpen || typeof window.matchMedia !== "function") return undefined;
+    const desktopMedia = window.matchMedia("(min-width: 768px)");
+    const closeOnDesktop = (event: MediaQueryListEvent) => {
+      if (event.matches) setIsMenuOpen(false);
+    };
+    if (desktopMedia.matches) setIsMenuOpen(false);
+    desktopMedia.addEventListener("change", closeOnDesktop);
+    return () => desktopMedia.removeEventListener("change", closeOnDesktop);
+  }, [isMenuOpen]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -160,7 +246,7 @@ function PublicShell() {
         <div className="mx-auto flex min-h-18 max-w-[1440px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-10">
           <Logo />
           <nav aria-label={isLoading ? "Public navigation loading" : "Primary navigation"} className="hidden items-center gap-1 md:flex">
-            {items.slice(0, 4).map((item) => (
+            {items.filter((item) => item.path !== "/login").slice(0, 4).map((item) => (
               <NavLink
                 aria-label={item.path === "/login" ? "Sign in navigation" : undefined}
                 className={({ isActive }) => cn(
@@ -195,8 +281,15 @@ function PublicShell() {
             </Button>
           </div>
         </div>
-        {isMenuOpen ? (
-          <nav aria-label="Mobile navigation" className="motion-dropdown border-t border-border bg-surface px-4 py-3 md:hidden" id="public-mobile-navigation">
+        {menuPresence.isMounted ? (
+          <nav
+            aria-label="Mobile navigation"
+            className="motion-dropdown border-t border-border bg-surface px-4 py-3 md:hidden"
+            data-motion-state={menuPresence.motionState}
+            id="public-mobile-navigation"
+            inert={menuPresence.motionState === "closed"}
+            onTransitionEnd={menuPresence.onTransitionEnd}
+          >
             <div className="mx-auto grid max-w-[1440px] gap-1">
               {items.map((item) => (
                 <NavLink className="rounded-xl px-4 py-3 text-sm font-semibold text-foreground-muted hover:bg-surface-muted hover:text-foreground" key={item.path} onClick={() => setIsMenuOpen(false)} to={item.path}>{item.label}</NavLink>
@@ -215,9 +308,34 @@ export function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [isNavigationOpen, setIsNavigationOpen] = useState(false);
+  const navigationPresence = usePresence(isNavigationOpen);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const navigationItems = getNavigationItems(user);
+
+  useEffect(() => {
+    setIsNavigationOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!isNavigationOpen || typeof window.matchMedia !== "function") return undefined;
+    const desktopMedia = window.matchMedia("(min-width: 1024px)");
+    const closeOnDesktop = (event: MediaQueryListEvent) => {
+      if (event.matches) setIsNavigationOpen(false);
+    };
+    if (desktopMedia.matches) setIsNavigationOpen(false);
+    desktopMedia.addEventListener("change", closeOnDesktop);
+    return () => desktopMedia.removeEventListener("change", closeOnDesktop);
+  }, [isNavigationOpen]);
+
+  useEffect(() => {
+    if (!navigationPresence.isMounted) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [navigationPresence.isMounted]);
 
   if (isLoading || !user) return <PublicShell />;
 
@@ -265,11 +383,16 @@ export function AppLayout() {
         </div>
       </aside>
 
-      {isNavigationOpen ? (
-        <div className="fixed inset-0 z-50 lg:hidden">
+      {navigationPresence.isMounted ? (
+        <div
+          className="motion-drawer-overlay fixed inset-0 z-50 lg:hidden"
+          data-motion-state={navigationPresence.motionState}
+          inert={navigationPresence.motionState === "closed"}
+          onTransitionEnd={navigationPresence.onTransitionEnd}
+        >
           <button
             aria-label="Close navigation"
-            className="motion-drawer-overlay absolute inset-0 bg-black/50"
+            className="absolute inset-0 bg-black/50"
             onClick={() => setIsNavigationOpen(false)}
             type="button"
           />
@@ -312,9 +435,7 @@ export function AppLayout() {
               <Link aria-label="Search" className={buttonStyles({ size: "icon", variant: "ghost" })} to="/search">
                 <Search aria-hidden="true" className="h-[1.15rem] w-[1.15rem]" />
               </Link>
-              <Link aria-label="Notifications" className={buttonStyles({ size: "icon", variant: "ghost" })} to="/notifications">
-                <Bell aria-hidden="true" className="h-[1.15rem] w-[1.15rem]" />
-              </Link>
+              <NotificationBellLink refreshKey={location.pathname} />
               <ThemeToggle compact />
               <Button
                 aria-label="Sign out"

@@ -67,6 +67,27 @@ export async function resetPassword(input: {
   return response.data;
 }
 
+export async function resendEmailVerification(input: {
+  email: string;
+}): Promise<{ message: string }> {
+  const response = await api.post<{ message: string }>(
+    "/auth/email-verification/resend",
+    input,
+  );
+  return response.data;
+}
+
+export async function verifyCustomerEmail(input: {
+  email: string;
+  code: string;
+}): Promise<{ message: string }> {
+  const response = await api.post<{ message: string }>(
+    "/auth/email-verification/confirm",
+    input,
+  );
+  return response.data;
+}
+
 export async function getCurrentUser(): Promise<AuthUser | null> {
   try {
     const response = await api.get<SessionResponse>("/auth/session");

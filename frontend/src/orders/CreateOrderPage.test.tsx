@@ -1,4 +1,5 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { StrictMode } from "react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -78,6 +79,7 @@ describe("CreateOrderPage", () => {
       customer: customers[0],
       status: "PENDING",
       createdAt: "2026-08-23T10:10:00Z",
+      totalAmount: "4980.00",
       items: [
         {
           id: 101,
@@ -88,6 +90,7 @@ describe("CreateOrderPage", () => {
           selectedSize: "M",
           selectedColor: "White",
           unitPriceSnapshot: "2490.00",
+          lineTotal: "4980.00",
         },
       ],
     });
@@ -126,6 +129,34 @@ describe("CreateOrderPage", () => {
       .toBeInTheDocument();
     expect(screen.getByText(/M · White · Qty 2 · LKR 2490\.00 each/i))
       .toBeInTheDocument();
+  });
+
+  it("does not show a form-data error when Strict Mode cancels the first load", async () => {
+    let rejectCanceledRequest!: (reason?: unknown) => void;
+    const canceledRequest = new Promise<never>((_resolve, reject) => {
+      rejectCanceledRequest = reject;
+    });
+    mockedGetOrderCustomers
+      .mockReturnValueOnce(canceledRequest)
+      .mockResolvedValueOnce(customers);
+
+    render(
+      <StrictMode>
+        <CreateOrderPage />
+      </StrictMode>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Create customer order" }))
+      .toBeInTheDocument();
+    await act(async () => {
+      rejectCanceledRequest(new DOMException("The request was aborted.", "AbortError"));
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText("Order form data could not be loaded."))
+        .not.toBeInTheDocument();
+      expect(screen.getByRole("option", { name: /Asha Perera/ })).toBeInTheDocument();
+    });
   });
 
   it("requires a selected customer and valid item before calling the API", async () => {

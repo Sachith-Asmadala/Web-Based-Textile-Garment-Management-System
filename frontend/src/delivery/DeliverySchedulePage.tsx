@@ -14,6 +14,7 @@ import { EmptyState, ErrorState, LoadingState } from "../components/AppStates";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { StatusBadge } from "../components/ui/StatusBadge";
 import { deliveryOrderSelectionPagePath } from "../navigation/navigation";
+import { ProductImage } from "../products/ProductImage";
 
 const inputClassName =
   "mt-2 w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20";
@@ -217,10 +218,18 @@ export function DeliverySchedulePage() {
           <p className="mt-1 text-sm text-muted">Order ID #{order.orderId} · Customer ID #{order.customerId} · {order.itemCount} item{order.itemCount === 1 ? "" : "s"} · {money(order.totalAmount)}</p>
           <div className="mt-5 grid gap-3 md:grid-cols-2">
             {order.items.map((item) => (
-              <div className="rounded-2xl border border-border bg-background/50 p-4" key={item.orderItemId}>
-                <p className="font-semibold text-foreground">Order item #{item.orderItemId}</p>
-                <p className="mt-2 text-sm text-foreground-muted">Product #{item.productId} · Variant #{item.variantId}</p>
-                <p className="mt-1 text-sm text-muted">{item.selectedSize} · {item.selectedColor} · Quantity {item.quantity}</p>
+              <div className="flex gap-4 rounded-2xl border border-border bg-background/50 p-4" key={item.orderItemId}>
+                <ProductImage
+                  alt={`${item.productName ?? `Product #${item.productId}`} order item`}
+                  className="h-20 w-20 shrink-0 rounded-xl border border-border"
+                  productName={item.productName ?? `Product #${item.productId}`}
+                  src={item.productImageUrl}
+                />
+                <div className="min-w-0">
+                  <p className="font-semibold text-foreground">{item.productName ?? `Order item #${item.orderItemId}`}</p>
+                  <p className="mt-2 text-sm text-foreground-muted">Product #{item.productId} · Variant #{item.variantId}</p>
+                  <p className="mt-1 text-sm text-muted">{item.selectedSize} · {item.selectedColor} · Quantity {item.quantity}</p>
+                </div>
               </div>
             ))}
           </div>

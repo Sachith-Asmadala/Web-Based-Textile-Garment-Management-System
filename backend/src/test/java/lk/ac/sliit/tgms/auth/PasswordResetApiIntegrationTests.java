@@ -2,10 +2,12 @@ package lk.ac.sliit.tgms.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import jakarta.servlet.http.Cookie;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Map;
@@ -17,6 +19,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
@@ -90,10 +93,50 @@ class PasswordResetApiIntegrationTests {
     }
 
     @Test
+    void repeatedResetRequestsAreThrottledWithoutCreatingAnotherValidToken() throws Exception {
+        createActiveCustomer("customer@example.com", "old-password-123");
+        String requestBody = """
+                {"email":"customer@example.com"}
+                """;
+
+        mockMvc.perform(post("/api/auth/password-reset/request")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isAccepted());
+        String firstTokenHash = jdbcTemplate.queryForObject(
+                "SELECT token_hash FROM password_reset_tokens", String.class);
+
+        mockMvc.perform(post("/api/auth/password-reset/request")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.message")
+                        .value("If an active account matches that email, a password reset link will be sent."));
+
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM password_reset_tokens", Integer.class))
+                .isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT token_hash FROM password_reset_tokens", String.class))
+                .isEqualTo(firstTokenHash);
+    }
+
+    @Test
     void validTokenChangesPasswordAndCanOnlyBeUsedOnce() throws Exception {
         long userId = createActiveCustomer("customer@example.com", "old-password-123");
+        Integer originalSessionVersion = jdbcTemplate.queryForObject(
+                "SELECT session_version FROM users WHERE id = ?", Integer.class, userId);
         String rawToken = "single-use-reset-token-value";
         insertResetToken(userId, rawToken, Instant.now().plusSeconds(600));
+        MvcResult oldLogin = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"customer@example.com","password":"old-password-123"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+        Cookie oldSession = oldLogin.getResponse().getCookie(AuthCookieService.COOKIE_NAME);
+        assertThat(oldSession).isNotNull();
 
         mockMvc.perform(post("/api/auth/password-reset/confirm")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -121,6 +164,12 @@ class PasswordResetApiIntegrationTests {
                         "new-secure-password-456", state.get("password_hash").toString()))
                 .isTrue();
         assertThat(state.get("used_at")).isNotNull();
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT session_version FROM users WHERE id = ?", Integer.class, userId))
+                .isEqualTo(originalSessionVersion + 1);
+
+        mockMvc.perform(get("/api/profile").cookie(oldSession))
+                .andExpect(status().isUnauthorized());
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -129,11 +178,16 @@ class PasswordResetApiIntegrationTests {
                                 """))
                 .andExpect(status().isUnauthorized());
 
-        mockMvc.perform(post("/api/auth/login")
+        MvcResult newLogin = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"email":"customer@example.com","password":"new-secure-password-456"}
                                 """))
+                .andExpect(status().isOk())
+                .andReturn();
+        Cookie newSession = newLogin.getResponse().getCookie(AuthCookieService.COOKIE_NAME);
+        assertThat(newSession).isNotNull();
+        mockMvc.perform(get("/api/profile").cookie(newSession))
                 .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/auth/password-reset/confirm")
@@ -201,8 +255,10 @@ class PasswordResetApiIntegrationTests {
     private long createActiveCustomer(String email, String password) {
         jdbcTemplate.update(
                 """
-                INSERT INTO users (email, password_hash, full_name, role, is_active)
-                VALUES (?, ?, 'Reset Test Customer', 'CUSTOMER', TRUE)
+                INSERT INTO users (
+                    email, password_hash, full_name, role, is_active, email_verified_at
+                )
+                VALUES (?, ?, 'Reset Test Customer', 'CUSTOMER', TRUE, CURRENT_TIMESTAMP(6))
                 """,
                 email,
                 passwordEncoder.encode(password));

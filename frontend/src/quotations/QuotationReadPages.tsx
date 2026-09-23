@@ -8,6 +8,7 @@ import {
   type QuotationDetail,
   type QuotationSummary,
 } from "../api/quotations";
+import { isApiRequestCanceled } from "../api/client";
 import { EmptyState, ErrorState, LoadingState } from "../components/AppStates";
 import {
   getQuotationDetailPagePath,
@@ -25,11 +26,17 @@ export function QuotationListPage() {
     setLoading(true);
     setError(null);
     try {
-      setQuotations(await getQuotations(signal));
+      const result = await getQuotations(signal);
+      if (!signal?.aborted) {
+        setQuotations(result);
+      }
     } catch (failure: unknown) {
+      if (isApiRequestCanceled(failure, signal)) return;
       setError(getQuotationApiError(failure, "Quotations could not be loaded.").message);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
     }
   }
 
@@ -82,10 +89,19 @@ export function QuotationDetailPage() {
     if (!id) return;
     const controller = new AbortController();
     setLoading(true);
+    setError(null);
+    setQuotation(null);
     void getQuotation(id, controller.signal)
-      .then(setQuotation)
-      .catch((failure: unknown) => setError(getQuotationApiError(failure, "Quotation could not be loaded.").message))
-      .finally(() => setLoading(false));
+      .then((result) => {
+        if (!controller.signal.aborted) setQuotation(result);
+      })
+      .catch((failure: unknown) => {
+        if (isApiRequestCanceled(failure, controller.signal)) return;
+        setError(getQuotationApiError(failure, "Quotation could not be loaded.").message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
     return () => controller.abort();
   }, [id]);
 

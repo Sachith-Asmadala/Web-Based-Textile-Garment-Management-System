@@ -35,6 +35,7 @@ public class PasswordResetService {
     private final PasswordPolicy passwordPolicy;
     private final Executor mailExecutor;
     private final Duration tokenLifetime;
+    private final Duration resendInterval;
     private final String clientOrigin;
 
     public PasswordResetService(
@@ -45,10 +46,15 @@ public class PasswordResetService {
             PasswordPolicy passwordPolicy,
             @Qualifier("passwordResetMailExecutor") Executor mailExecutor,
             @Value("${tgms.auth.reset.ttl-minutes:30}") long tokenLifetimeMinutes,
+            @Value("${tgms.auth.reset.resend-seconds:60}") long resendSeconds,
             @Value("${tgms.client-origin}") String clientOrigin) {
         if (tokenLifetimeMinutes < 5 || tokenLifetimeMinutes > 120) {
             throw new IllegalStateException(
                     "PASSWORD_RESET_TTL_MINUTES must be between 5 and 120 minutes.");
+        }
+        if (resendSeconds < 30 || resendSeconds > 600) {
+            throw new IllegalStateException(
+                    "PASSWORD_RESET_RESEND_SECONDS must be between 30 and 600 seconds.");
         }
         this.userAccountRepository = userAccountRepository;
         this.tokenRepository = tokenRepository;
@@ -57,6 +63,7 @@ public class PasswordResetService {
         this.passwordPolicy = passwordPolicy;
         this.mailExecutor = mailExecutor;
         this.tokenLifetime = Duration.ofMinutes(tokenLifetimeMinutes);
+        this.resendInterval = Duration.ofSeconds(resendSeconds);
         this.clientOrigin = clientOrigin;
     }
 
@@ -75,8 +82,17 @@ public class PasswordResetService {
             return;
         }
 
-        Instant expiresAt = Instant.now().plus(tokenLifetime);
+        Instant now = Instant.now();
+        boolean throttled = tokenRepository.findLatestCreatedAt(account.get().id())
+                .map(createdAt -> createdAt.isAfter(now.minus(resendInterval)))
+                .orElse(false);
+        if (throttled) {
+            return;
+        }
+
+        Instant expiresAt = now.plus(tokenLifetime);
         try {
+            tokenRepository.invalidateUnusedForUser(account.get().id(), now);
             tokenRepository.create(account.get().id(), tokenHash, expiresAt);
             String resetUrl = UriComponentsBuilder.fromUriString(clientOrigin)
                     .path("/reset-password")

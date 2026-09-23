@@ -126,6 +126,68 @@ body {
   color: var(--text-primary);
 }
 
+.workspace-themed-background {
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+  background-color: var(--background);
+}
+
+.workspace-themed-background::before,
+.workspace-themed-background::after {
+  position: fixed;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+}
+
+.workspace-themed-background::before {
+  z-index: -2;
+  background-image: url("/backgrounds/workspace-light.png");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.workspace-themed-background::after {
+  z-index: -1;
+  background:
+    linear-gradient(
+      90deg,
+      rgb(245 247 243 / 0.88) 0%,
+      rgb(245 247 243 / 0.72) 48%,
+      rgb(245 247 243 / 0.56) 100%
+    );
+}
+
+:root[data-theme="dark"] .workspace-themed-background::before {
+  background-image: url("/backgrounds/workspace-dark.png");
+}
+
+:root[data-theme="dark"] .workspace-themed-background::after {
+  background:
+    linear-gradient(
+      90deg,
+      rgb(0 0 0 / 0.72) 0%,
+      rgb(0 0 0 / 0.52) 48%,
+      rgb(0 0 0 / 0.32) 100%
+    );
+}
+
+@media (max-width: 48rem) {
+  .workspace-themed-background::before {
+    background-position: 62% center;
+  }
+
+  .workspace-themed-background::after {
+    background: rgb(245 247 243 / 0.76);
+  }
+
+  :root[data-theme="dark"] .workspace-themed-background::after {
+    background: rgb(0 0 0 / 0.6);
+  }
+}
+
 button,
 input,
 select,

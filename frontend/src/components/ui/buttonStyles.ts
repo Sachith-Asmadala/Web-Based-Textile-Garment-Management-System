@@ -29,8 +29,9 @@ export function buttonStyles({
   variant?: ButtonVariant;
 } = {}) {
   return cn(
-    "inline-flex shrink-0 items-center justify-center gap-2 border font-semibold transition duration-150 ease-[var(--ease-standard)]",
-    "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-55 enabled:hover:-translate-y-px enabled:active:translate-y-0 enabled:active:scale-[0.98]",
+    "inline-flex shrink-0 items-center justify-center gap-2 border font-semibold",
+    size !== "icon" && "motion-button",
+    "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-55",
     variants[variant],
     sizes[size],
     className,

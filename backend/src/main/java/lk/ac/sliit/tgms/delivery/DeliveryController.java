@@ -157,6 +157,7 @@ public class DeliveryController {
             long productId,
             long variantId,
             String productName,
+            String productImageUrl,
             int quantity,
             String selectedSize,
             String selectedColor,
@@ -169,6 +170,7 @@ public class DeliveryController {
                     item.productId(),
                     item.variantId(),
                     item.productName(),
+                    item.productImageUrl(),
                     item.quantity(),
                     item.selectedSize(),
                     item.selectedColor(),
@@ -208,6 +210,8 @@ public class DeliveryController {
             long orderItemId,
             long productId,
             long variantId,
+            String productName,
+            String productImageUrl,
             int quantity,
             String selectedSize,
             String selectedColor) {
@@ -217,6 +221,8 @@ public class DeliveryController {
                     item.orderItemId(),
                     item.productId(),
                     item.variantId(),
+                    item.productName(),
+                    item.productImageUrl(),
                     item.quantity(),
                     item.selectedSize(),
                     item.selectedColor());

@@ -1,6 +1,8 @@
-import type { CreateProductInput } from "../api/products";
+import type { UpdateProductInput } from "../api/products";
 
-export type ProductField = keyof CreateProductInput;
+export type ProductFormInput = Omit<UpdateProductInput, "variantId">;
+
+export type ProductField = keyof ProductFormInput;
 export type ProductFieldErrors = Partial<Record<ProductField, string>>;
 type RequiredTextField = "name" | "category" | "size" | "color";
 
@@ -14,32 +16,37 @@ const requiredTextFields: Array<[RequiredTextField, string, number]> = [
   ["color", "Color", 64],
 ];
 
-export function emptyProductForm(): CreateProductInput {
+export function emptyProductForm(): ProductFormInput {
   return {
     name: "",
     category: "",
+    description: "",
     imageUrl: "",
     size: "",
     color: "",
     price: "",
     availability: "AVAILABLE",
+    status: "ACTIVE",
   };
 }
 
-export function normalizeProductForm(form: CreateProductInput): CreateProductInput {
+export function normalizeProductForm(form: ProductFormInput): ProductFormInput {
   const imageUrl = form.imageUrl?.trim();
+  const description = form.description?.trim();
   return {
     name: form.name.trim(),
     category: form.category.trim(),
+    ...(description ? { description } : {}),
     size: form.size.trim(),
     color: form.color.trim(),
     price: form.price.trim(),
     availability: form.availability,
+    status: form.status,
     ...(imageUrl ? { imageUrl } : {}),
   };
 }
 
-export function validateProductForm(form: CreateProductInput): ProductFieldErrors {
+export function validateProductForm(form: ProductFormInput): ProductFieldErrors {
   const errors: ProductFieldErrors = {};
 
   for (const [field, label, maximumLength] of requiredTextFields) {
@@ -55,10 +62,19 @@ export function validateProductForm(form: CreateProductInput): ProductFieldError
     errors.price = "Price must be positive with at most 10 digits and 2 decimals.";
   }
 
+  const description = form.description?.trim() ?? "";
+  if (description.length > 2000) {
+    errors.description = "Description must not exceed 2000 characters.";
+  }
+
   const imageUrl = form.imageUrl?.trim() ?? "";
   if (imageUrl.length > 500) {
     errors.imageUrl = "Product image URL must not exceed 500 characters.";
-  } else if (imageUrl && !localProductImagePattern.test(imageUrl)) {
+  } else if (
+    imageUrl
+    && !localProductImagePattern.test(imageUrl)
+    && !imageUrl.startsWith("/api/product-images/")
+  ) {
     try {
       const parsed = new URL(imageUrl);
       if (parsed.protocol !== "https:") {

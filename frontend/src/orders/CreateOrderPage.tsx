@@ -7,6 +7,7 @@ import {
   type CreateOrderResponse,
   type OrderCustomerOption,
 } from "../api/orders";
+import { isApiRequestCanceled } from "../api/client";
 import { getCatalogProducts, getProductApiError } from "../api/products";
 import { EmptyState, ErrorState, LoadingState } from "../components/AppStates";
 import { StatusBadge } from "../components/ui/StatusBadge";
@@ -64,16 +65,21 @@ export function CreateOrderPage() {
     try {
       const [customerOptions, catalogProducts] = await Promise.all([
         getOrderCustomers(undefined, signal),
-        getCatalogProducts({ availability: "AVAILABLE" }, signal),
+        getCatalogProducts({}, signal),
       ]);
-      setCustomers(customerOptions);
-      setProducts(catalogProducts);
+      if (!signal?.aborted) {
+        setCustomers(customerOptions);
+        setProducts(catalogProducts);
+      }
     } catch (error: unknown) {
+      if (isApiRequestCanceled(error, signal)) return;
       const orderError = getOrderApiError(error, "Order form data could not be loaded.");
       const productError = getProductApiError(error, orderError.message);
       setLoadError(productError.message || orderError.message);
     } finally {
-      setIsLoading(false);
+      if (!signal?.aborted) {
+        setIsLoading(false);
+      }
     }
   }
 

@@ -2,7 +2,7 @@ import { Badge, type BadgeTone } from "./Badge";
 
 const successStatuses = new Set(["ACTIVE", "AVAILABLE", "COMPLETED", "DELIVERED", "PAID", "CONFIRMED"]);
 const warningStatuses = new Set(["PENDING", "SCHEDULED", "PARTIALLY_PAID", "LOW_STOCK"]);
-const dangerStatuses = new Set(["CANCELLED", "DISCONTINUED", "FAILED"]);
+const dangerStatuses = new Set(["CANCELLED", "FAILED"]);
 const infoStatuses = new Set(["IN_PROGRESS", "IN_PRODUCTION", "READY_FOR_DELIVERY", "OUT_FOR_DELIVERY"]);
 
 function toneForStatus(status: string): BadgeTone {
@@ -14,6 +14,7 @@ function toneForStatus(status: string): BadgeTone {
 }
 
 function formatStatus(status: string) {
+  if (status === "READY_FOR_DELIVERY") return "Ready For Delivery";
   return status
     .toLowerCase()
     .split("_")
@@ -22,5 +23,5 @@ function formatStatus(status: string) {
 }
 
 export function StatusBadge({ status, label }: { status: string; label?: string }) {
-  return <Badge className="motion-status-badge" key={status} tone={toneForStatus(status)}>{label ?? formatStatus(status)}</Badge>;
+  return <Badge className="motion-status-badge" tone={toneForStatus(status)}>{label ?? formatStatus(status)}</Badge>;
 }

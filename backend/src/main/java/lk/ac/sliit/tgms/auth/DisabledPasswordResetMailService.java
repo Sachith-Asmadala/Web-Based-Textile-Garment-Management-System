@@ -8,7 +8,7 @@ import org.springframework.stereotype.Service;
 
 @Service
 @ConditionalOnProperty(
-        name = "tgms.auth.reset.smtp-enabled",
+        name = "tgms.auth.mail.smtp-enabled",
         havingValue = "false",
         matchIfMissing = true)
 public class DisabledPasswordResetMailService implements PasswordResetMailService {

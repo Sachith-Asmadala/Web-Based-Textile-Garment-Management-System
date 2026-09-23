@@ -134,9 +134,10 @@ class DeliveryModuleHandoffIntegrationTests {
         jdbcTemplate.update(
                 """
                 INSERT INTO order_items (
-                    id, order_id, product_id, variant_id, quantity,
+                    id, order_id, product_id, variant_id, product_name_snapshot,
+                    product_image_url_snapshot, quantity,
                     selected_size, selected_color, unit_price_snapshot
-                ) VALUES (99721, 99711, 99742, 99743, 1, 'L', 'Black', 3200.00)
+                ) VALUES (99721, 99711, 99742, 99743, 'Delivery handoff product', NULL, 1, 'L', 'Black', 3200.00)
                 """);
         jdbcTemplate.update(
                 """

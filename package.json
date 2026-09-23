@@ -8,7 +8,7 @@
     "frontend"
   ],
   "engines": {
-    "node": ">=20.19.0"
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   },
   "scripts": {
     "dev": "concurrently --kill-others-on-fail --names api,web --prefix-colors blue,magenta \"npm run dev:backend\" \"node scripts/run-frontend-dev.mjs\"",
@@ -38,6 +38,7 @@
     "db:restore": "./scripts/deployment/mysql-restore.sh",
     "deploy:verify": "node scripts/deployment/verify-deployment-assets.mjs",
     "demo:reset": "dotenv -e backend/.env -- ./scripts/demo/reset-demo.sh --confirm RESET_TGMS_DEMO",
+    "demo:business:seed": "dotenv -e backend/.env -- ./scripts/demo/seed-business-data.sh --confirm ADD_TGMS_BUSINESS_DATA",
     "demo:verify": "dotenv -e backend/.env -- ./scripts/demo/verify-demo-db.sh",
     "demo:assets:check": "node scripts/demo/verify-demo-assets.mjs",
     "handover:verify": "npm run demo:assets:check && npm run deploy:verify && npm run uat:catalog:check"

@@ -20,6 +20,7 @@ import {
 } from "../api/productionTasks";
 import { EmptyState, ErrorState, LoadingState } from "../components/AppStates";
 import { parseProductionTaskPageId } from "../navigation/navigation";
+import { ProductImage } from "../products/ProductImage";
 
 const inputClassName =
   "mt-2 w-full rounded-xl border border-border bg-background/70 px-4 py-3 text-foreground outline-none transition focus:border-primary";
@@ -358,10 +359,18 @@ export function ProductionTaskDetailPage() {
           </div>
           <div className="mt-6 space-y-3" aria-label="Linked order items">
             {detail.order.items.map((item) => (
-              <article className="rounded-2xl border border-border bg-background/50 p-4" key={item.orderItemId}>
-                <p className="font-semibold text-foreground">Order item #{item.orderItemId}</p>
-                <p className="mt-2 text-sm text-foreground-muted">Product #{item.productId} · Variant #{item.variantId} · {item.selectedSize} · {item.selectedColor}</p>
-                <p className="mt-1 text-sm text-muted">Required quantity: {item.quantity}</p>
+              <article className="flex gap-4 rounded-2xl border border-border bg-background/50 p-4" key={item.orderItemId}>
+                <ProductImage
+                  alt={`${item.productName ?? `Product #${item.productId}`} order item`}
+                  className="h-20 w-20 shrink-0 rounded-xl border border-border"
+                  productName={item.productName ?? `Product #${item.productId}`}
+                  src={item.productImageUrl}
+                />
+                <div className="min-w-0">
+                  <p className="font-semibold text-foreground">{item.productName ?? `Order item #${item.orderItemId}`}</p>
+                  <p className="mt-2 text-sm text-foreground-muted">Product #{item.productId} · Variant #{item.variantId} · {item.selectedSize} · {item.selectedColor}</p>
+                  <p className="mt-1 text-sm text-muted">Required quantity: {item.quantity}</p>
+                </div>
               </article>
             ))}
           </div>
@@ -418,7 +427,18 @@ export function ProductionTaskDetailPage() {
               )}
             </div>
           ) : (
-            <p className="mt-5 text-sm text-foreground-muted">Production status: <strong>COMPLETED</strong>{detail.task.completedAt ? ` · Completed ${new Date(detail.task.completedAt).toLocaleString()}` : ""}</p>
+            <div className="mt-5">
+              <p className="text-sm text-foreground-muted">Production status: <strong>COMPLETED</strong>{detail.task.completedAt ? ` · Completed ${new Date(detail.task.completedAt).toLocaleString()}` : ""}</p>
+              {detail.order.currentStatus === "READY_FOR_DELIVERY" ? (
+                <p className="mt-4 rounded-2xl border border-success-border bg-success-soft p-4 text-sm text-success">
+                  Production completed. The order is ready for delivery scheduling by a Sales Officer.
+                </p>
+              ) : detail.order.currentStatus === "IN_PRODUCTION" ? (
+                <p className="mt-4 rounded-2xl border border-warning-border bg-warning-soft p-4 text-sm text-warning">
+                  This production task is complete, but other production tasks for this order are still pending. The order will become ready for delivery after all production tasks are completed.
+                </p>
+              ) : null}
+            </div>
           )}
           {startSuccessMessage ? <p className="mt-4 text-sm text-success" role="status">{startSuccessMessage}</p> : null}
           {startError ? <p className="mt-4 text-sm text-danger" role="alert">{startError}</p> : null}
@@ -576,6 +596,21 @@ export function ProductionTaskDetailPage() {
         {successMessage ? <p className="rounded-2xl border border-success-border bg-success-soft p-4 text-success" role="status">{successMessage}</p> : null}
         {submitError ? <p className="text-sm text-danger" role="alert">{submitError}</p> : null}
 
+        {detail.task.status === "COMPLETED" ? (
+          <section className="rounded-3xl border border-border bg-surface/70 p-6" aria-labelledby="completed-work-details-heading">
+            <h2 className="text-xl font-bold text-foreground" id="completed-work-details-heading">Production details</h2>
+            <p className="mt-2 rounded-2xl border border-border bg-background/50 p-4 text-sm text-muted">
+              Completed production records are read-only.
+            </p>
+            {detail.workDetails ? (
+              <dl className="mt-5 grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2"><dt className="text-xs uppercase tracking-wide text-muted">Manufacturing work details</dt><dd className="mt-1 text-foreground">{detail.workDetails.workDetails}</dd></div>
+                <div><dt className="text-xs uppercase tracking-wide text-muted">Work assignment</dt><dd className="mt-1 text-foreground">{detail.workDetails.workAssignment}</dd></div>
+                <div><dt className="text-xs uppercase tracking-wide text-muted">Work notes</dt><dd className="mt-1 text-foreground">{detail.workDetails.workNotes ?? "No notes recorded"}</dd></div>
+              </dl>
+            ) : <p className="mt-5 text-sm text-muted">No work details were recorded before completion.</p>}
+          </section>
+        ) : (
         <form className="rounded-3xl border border-border bg-surface/70 p-6" onSubmit={submit}>
           <h2 className="text-xl font-bold text-foreground">{detail.workDetails ? "Edit work details" : "Add work details"}</h2>
           <p className="mt-2 text-sm text-muted">Work details and assignment are required. Notes are optional.</p>
@@ -594,6 +629,7 @@ export function ProductionTaskDetailPage() {
           <button className="mt-6 rounded-xl bg-primary px-6 py-3 font-semibold text-primary-foreground transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50" disabled={isSubmitting} type="submit">{isSubmitting ? "Saving details…" : "Save production details"}</button>
           {detail.workDetails ? <p className="mt-4 text-xs text-muted">Saved details last updated {new Date(detail.workDetails.updatedAt).toLocaleString()}.</p> : null}
         </form>
+        )}
       </div>
     </section>
   );

@@ -4,21 +4,43 @@
   --motion-normal: 180ms;
   --motion-smooth: 220ms;
   --motion-slow: 300ms;
+  --default-transition-duration: var(--motion-fast);
+  --default-transition-timing-function: var(--ease-standard);
   --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-exit: cubic-bezier(0.4, 0, 1, 1);
 }
 
-html[data-theme-ready="true"] body,
-html[data-theme-ready="true"] header,
-html[data-theme-ready="true"] aside,
-html[data-theme-ready="true"] main,
-html[data-theme-ready="true"] section,
-html[data-theme-ready="true"] article,
-html[data-theme-ready="true"] footer,
-html[data-theme-ready="true"] input,
-html[data-theme-ready="true"] select,
-html[data-theme-ready="true"] textarea {
+:where(html[data-theme-ready="true"]) :where(
+  body,
+  header,
+  aside,
+  main,
+  section,
+  article,
+  nav,
+  footer,
+  form,
+  li,
+  table,
+  thead,
+  tbody,
+  tfoot,
+  tr,
+  th,
+  td,
+  input,
+  select,
+  textarea,
+  .app-shadow,
+  .motion-interactive-card,
+  .motion-dialog-content,
+  .motion-drawer,
+  .motion-dropdown,
+  .motion-state-panel,
+  .notification-stack-preview,
+  .home-lower-glass
+) {
   transition-duration: var(--motion-smooth);
   transition-property: background-color, border-color, color, box-shadow;
   transition-timing-function: var(--ease-standard);
@@ -35,20 +57,24 @@ html[data-theme-ready="true"] textarea {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  :where(button:not(:disabled), a[href]):hover {
-    transform: translateY(-1px);
-  }
-
-  :where(button:not(:disabled), a[href]):hover :where(svg) {
-    transform: scale(1.04);
-  }
-
   tbody tr:hover {
     background-color: color-mix(in srgb, var(--primary-soft) 34%, transparent);
   }
 }
 
-:where(button:not(:disabled), a[href]):active {
+.motion-button {
+  transition-duration: var(--motion-fast);
+  transition-property: transform, color, background-color, border-color, box-shadow, opacity;
+  transition-timing-function: var(--ease-standard);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .motion-button:not(:disabled):hover {
+    transform: translateY(-1px);
+  }
+}
+
+.motion-button:not(:disabled):active {
   transform: scale(0.98);
   transition-duration: var(--motion-instant);
 }
@@ -75,11 +101,11 @@ tbody {
 
 .motion-reveal {
   opacity: 0;
-  transform: translateY(10px);
+  transform: translateY(8px);
 }
 
 .motion-reveal.is-visible {
-  animation: motion-reveal-in var(--motion-slow) var(--ease-emphasized) both;
+  animation: motion-reveal-in var(--motion-smooth) var(--ease-emphasized) both;
 }
 
 .motion-stagger > * {
@@ -88,14 +114,14 @@ tbody {
 }
 
 .motion-stagger > :nth-child(1) { animation-delay: 20ms; }
-.motion-stagger > :nth-child(2) { animation-delay: 55ms; }
-.motion-stagger > :nth-child(3) { animation-delay: 90ms; }
-.motion-stagger > :nth-child(4) { animation-delay: 125ms; }
-.motion-stagger > :nth-child(5) { animation-delay: 160ms; }
-.motion-stagger > :nth-child(6) { animation-delay: 195ms; }
-.motion-stagger > :nth-child(7) { animation-delay: 230ms; }
-.motion-stagger > :nth-child(8) { animation-delay: 265ms; }
-.motion-stagger > :nth-child(n + 9) { opacity: 1; animation: none; }
+.motion-stagger > :nth-child(2) { animation-delay: 45ms; }
+.motion-stagger > :nth-child(3) { animation-delay: 70ms; }
+.motion-stagger > :nth-child(4) { animation-delay: 95ms; }
+.motion-stagger > :nth-child(5) { animation-delay: 120ms; }
+.motion-stagger > :nth-child(6) { animation-delay: 145ms; }
+.motion-stagger > :nth-child(7) { animation-delay: 170ms; }
+.motion-stagger > :nth-child(8) { animation-delay: 195ms; }
+.motion-stagger > :nth-child(n + 9) { animation-delay: 210ms; }
 
 .motion-reveal:not(.is-visible) .motion-stagger > * {
   opacity: 0;
@@ -107,7 +133,11 @@ tbody {
 }
 
 .motion-interactive-card {
-  transition: transform var(--motion-normal) var(--ease-standard), border-color var(--motion-normal) var(--ease-standard), box-shadow var(--motion-normal) var(--ease-standard);
+  transition:
+    transform var(--motion-normal) var(--ease-standard),
+    background-color var(--motion-normal) var(--ease-standard),
+    border-color var(--motion-normal) var(--ease-standard),
+    box-shadow var(--motion-normal) var(--ease-standard);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -117,25 +147,121 @@ tbody {
   }
 }
 
-.motion-dialog-overlay {
-  animation: motion-overlay-in var(--motion-normal) var(--ease-standard) both;
+.motion-dialog-overlay,
+.motion-drawer-overlay {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-normal) var(--ease-exit);
+}
+
+.motion-dialog-overlay[data-motion-state="open"],
+.motion-drawer-overlay[data-motion-state="open"] {
+  opacity: 1;
+  pointer-events: auto;
+  transition-timing-function: var(--ease-standard);
 }
 
 .motion-dialog-content {
-  animation: motion-dialog-in var(--motion-smooth) var(--ease-emphasized) both;
+  opacity: 0;
+  transform: translateY(4px) scale(0.985);
+  transition:
+    opacity var(--motion-normal) var(--ease-exit),
+    transform var(--motion-normal) var(--ease-exit),
+    background-color var(--motion-smooth) var(--ease-standard),
+    border-color var(--motion-smooth) var(--ease-standard),
+    color var(--motion-smooth) var(--ease-standard),
+    box-shadow var(--motion-smooth) var(--ease-standard);
 }
 
-.motion-drawer-overlay {
-  animation: motion-overlay-in var(--motion-normal) var(--ease-standard) both;
+.motion-dialog-overlay[data-motion-state="open"] .motion-dialog-content {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition-duration: var(--motion-smooth);
+  transition-timing-function: var(--ease-emphasized);
 }
 
 .motion-drawer {
-  animation: motion-drawer-in var(--motion-smooth) var(--ease-emphasized) both;
+  opacity: 0;
+  transform: translateX(-100%);
+  transition:
+    opacity var(--motion-normal) var(--ease-exit),
+    transform var(--motion-normal) var(--ease-exit),
+    background-color var(--motion-smooth) var(--ease-standard),
+    border-color var(--motion-smooth) var(--ease-standard),
+    color var(--motion-smooth) var(--ease-standard),
+    box-shadow var(--motion-smooth) var(--ease-standard);
+}
+
+.motion-drawer-overlay[data-motion-state="open"] .motion-drawer {
+  opacity: 1;
+  transform: translateX(0);
+  transition-duration: var(--motion-smooth);
+  transition-timing-function: var(--ease-emphasized);
 }
 
 .motion-dropdown {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px) scale(0.985);
   transform-origin: top;
-  animation: motion-dropdown-in var(--motion-normal) var(--ease-emphasized) both;
+  transition:
+    opacity var(--motion-fast) var(--ease-exit),
+    transform var(--motion-fast) var(--ease-exit),
+    background-color var(--motion-smooth) var(--ease-standard),
+    border-color var(--motion-smooth) var(--ease-standard),
+    color var(--motion-smooth) var(--ease-standard),
+    box-shadow var(--motion-smooth) var(--ease-standard);
+}
+
+.motion-dropdown[data-motion-state="open"] {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+  transition-duration: var(--motion-normal);
+  transition-timing-function: var(--ease-emphasized);
+}
+
+.motion-removable {
+  display: grid;
+  grid-template-rows: 1fr;
+  min-width: 0;
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition:
+    grid-template-rows var(--motion-smooth) var(--ease-emphasized),
+    opacity var(--motion-smooth) var(--ease-exit),
+    transform var(--motion-smooth) var(--ease-exit);
+}
+
+.motion-removable[data-motion-state="closed"] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px) scale(0.985);
+}
+
+.motion-removable-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.motion-swap {
+  display: grid;
+}
+
+.motion-swap-layer {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+
+.motion-swap-entering {
+  animation: motion-state-in var(--motion-normal) var(--ease-emphasized) both;
+}
+
+.motion-swap-exiting {
+  z-index: 1;
+  pointer-events: none;
+  animation: motion-state-out var(--motion-fast) var(--ease-exit) both;
 }
 
 .motion-state-panel {
@@ -479,21 +605,20 @@ tbody {
 
 .notification-stack-list {
   position: relative;
+  display: grid;
+  gap: 0.5rem;
 }
 
 .notification-stack-card {
   position: relative;
-  transform: scaleX(var(--notification-stack-scale, 1));
-  transform-origin: top center;
+  transform: translateX(var(--notification-stack-offset, 0)) scale(var(--notification-stack-scale, 1));
+  transform-origin: center;
   transition:
-    margin-top var(--motion-smooth) var(--ease-emphasized),
     transform var(--motion-smooth) var(--ease-emphasized),
-    box-shadow var(--motion-smooth) var(--ease-standard);
+    box-shadow var(--motion-smooth) var(--ease-standard),
+    opacity var(--motion-normal) var(--ease-standard);
 }
 
-.notification-stack-card + .notification-stack-card {
-  margin-top: -5rem;
-}
 
 .notification-stack-footer-text {
   display: grid;
@@ -523,14 +648,8 @@ tbody {
 @media (hover: hover) and (pointer: fine) {
   .notification-stack-preview:hover .notification-stack-card,
   .notification-stack-preview:focus-within .notification-stack-card {
-    margin-top: 0.5rem;
-    transform: scaleX(1);
+    transform: translateX(0) scale(1);
     box-shadow: 0 12px 28px rgb(var(--shadow-color) / 0.1);
-  }
-
-  .notification-stack-preview:hover .notification-stack-card:first-child,
-  .notification-stack-preview:focus-within .notification-stack-card:first-child {
-    margin-top: 0;
   }
 
   .notification-stack-preview:hover .notification-stack-summary,
@@ -553,18 +672,15 @@ tbody {
     transform: none;
   }
 
-  .notification-stack-card + .notification-stack-card {
-    margin-top: 0.5rem;
-  }
 }
 
 @keyframes motion-page-in {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes motion-reveal-in {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
@@ -578,29 +694,14 @@ tbody {
   to { opacity: 1; }
 }
 
-@keyframes motion-overlay-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes motion-dialog-in {
-  from { opacity: 0; transform: translateY(5px) scale(0.97); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-@keyframes motion-drawer-in {
-  from { opacity: 0; transform: translateX(-100%); }
-  to { opacity: 1; transform: translateX(0); }
-}
-
-@keyframes motion-dropdown-in {
-  from { opacity: 0; transform: translateY(-4px) scaleY(0.98); }
-  to { opacity: 1; transform: translateY(0) scaleY(1); }
-}
-
 @keyframes motion-state-in {
   from { opacity: 0; transform: translateY(5px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes motion-state-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-3px); }
 }
 
 @keyframes motion-icon-in {
@@ -665,6 +766,13 @@ tbody {
     animation: none !important;
   }
 
+  .motion-removable {
+    grid-template-rows: 1fr !important;
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
   .home-lower-video {
     transform: none !important;
   }
@@ -677,6 +785,10 @@ tbody {
     display: none;
   }
 
+  :where(button, a[href]),
+  .motion-button,
+  .motion-interactive-card,
+  .theme-toggle-icon,
   .hero-action:hover,
   .hero-action:hover .hero-action-label svg {
     transform: none !important;
@@ -691,9 +803,6 @@ tbody {
     transform: none !important;
   }
 
-  .notification-stack-card + .notification-stack-card {
-    margin-top: 0.5rem;
-  }
 }
 
 @media print {

@@ -81,7 +81,7 @@ class DashboardReportApiIntegrationTests {
         insertOrder(customerId, "TGMS75-OUTSIDE", "CANCELLED", LocalDateTime.of(2026, 7, 10, 10, 0));
         insertInventory("TGMS75-LOW", new BigDecimal("4.000"), new BigDecimal("5.000"), "ACTIVE");
         insertInventory("TGMS75-OK", new BigDecimal("20.000"), new BigDecimal("5.000"), "ACTIVE");
-        insertInventory("TGMS75-OLD", BigDecimal.ZERO, BigDecimal.ZERO, "DISCONTINUED");
+        insertInventory("TGMS75-INACTIVE", BigDecimal.ZERO, BigDecimal.ZERO, "INACTIVE");
         insertProduction(orderId, "TGMS75-TASK", "IN_PROGRESS", LocalDateTime.of(2026, 8, 12, 9, 0));
         insertDelivery(orderId, "TGMS75-DEL", "DELIVERED", LocalDateTime.of(2026, 8, 20, 9, 0));
 

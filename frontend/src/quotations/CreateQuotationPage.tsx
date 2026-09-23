@@ -8,6 +8,7 @@ import {
   type CreateQuotationResponse,
   type QuotationCustomerOption,
 } from "../api/quotations";
+import { isApiRequestCanceled } from "../api/client";
 import { getCatalogProducts, getProductApiError } from "../api/products";
 import { EmptyState, ErrorState, LoadingState } from "../components/AppStates";
 import { quotationListPagePath } from "../navigation/navigation";
@@ -55,15 +56,20 @@ export function CreateQuotationPage() {
     try {
       const [customerOptions, catalog] = await Promise.all([
         getQuotationCustomers(undefined, signal),
-        getCatalogProducts({ availability: "AVAILABLE" }, signal),
+        getCatalogProducts({}, signal),
       ]);
-      setCustomers(customerOptions);
-      setProducts(catalog);
+      if (!signal?.aborted) {
+        setCustomers(customerOptions);
+        setProducts(catalog);
+      }
     } catch (error: unknown) {
+      if (isApiRequestCanceled(error, signal)) return;
       const quoteError = getQuotationApiError(error, "Quotation form data could not be loaded.");
       setLoadError(getProductApiError(error, quoteError.message).message);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
     }
   }
 

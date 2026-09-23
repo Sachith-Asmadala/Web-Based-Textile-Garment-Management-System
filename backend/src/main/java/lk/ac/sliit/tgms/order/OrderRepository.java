@@ -12,6 +12,8 @@ public interface OrderRepository {
             long orderId,
             long productId,
             long variantId,
+            String productNameSnapshot,
+            String productImageUrlSnapshot,
             int quantity,
             String selectedSize,
             String selectedColor,

@@ -245,8 +245,8 @@ public class OrderService {
         OrderDetail current = orderRepository.findOrderDetail(validatedOrderId, null)
                 .orElseThrow(OrderNotFoundException::new);
 
-        if (!OrderStatusLifecycle.canTransition(current.status(), requested)) {
-            throw new OrderStatusTransitionException(current.status(), requested);
+        if (!OrderStatusLifecycle.canStaffTransition(current.status(), requested)) {
+            throw OrderStatusTransitionException.forStaff(current.status(), requested);
         }
         if (requested == OrderStatus.CANCELLED) {
             orderRepository.findPaymentByOrderId(validatedOrderId)
@@ -303,6 +303,8 @@ public class OrderService {
                     order.id(),
                     selection.productId(),
                     selection.variantId(),
+                    selection.productName(),
+                    selection.productImageUrl(),
                     requested.quantity(),
                     selection.size(),
                     selection.color(),
@@ -362,8 +364,18 @@ public class OrderService {
             if (amount.compareTo(invoice.totalAmount()) > 0) {
                 fields.put("amountPaid", "Amount paid cannot exceed the invoice total.");
             }
+            if (currentPayment.paymentStatus() == OrderPaymentStatus.PARTIALLY_PAID
+                    && status == OrderPaymentStatus.PARTIALLY_PAID
+                    && amount.compareTo(currentPayment.amountPaid()) < 0) {
+                fields.put(
+                        "amountPaid",
+                        "Amount paid cannot be reduced because refund/reversal handling is not enabled.");
+            }
             if (status != OrderPaymentStatus.UNPAID && method == null && !fields.containsKey("paymentMethod")) {
                 fields.put("paymentMethod", "Select how the payment was recorded.");
+            }
+            if (status == OrderPaymentStatus.UNPAID && method != null) {
+                fields.put("paymentMethod", "Unpaid records cannot have a payment method.");
             }
         }
         if (!fields.isEmpty()) {

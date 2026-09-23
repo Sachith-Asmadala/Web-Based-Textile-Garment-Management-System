@@ -9,6 +9,9 @@ import {
   type OperationalNotification,
 } from "../api/notifications";
 import { EmptyState, ErrorState, LoadingState } from "../components/AppStates";
+import { MotionSwap } from "../motion/MotionSwap";
+import { motionDurations } from "../motion/motionTokens";
+import { usePresence } from "../motion/usePresence";
 
 const kindLabels: Record<OperationalNotification["kind"], string> = {
   LOW_STOCK: "Inventory alert",
@@ -31,50 +34,70 @@ function formatTimestamp(value: string) {
 interface NotificationCardProps {
   busyNotificationId: number | null;
   notification: OperationalNotification;
+  isRemoving?: boolean;
   onMarkRead: (notification: OperationalNotification) => void;
+  onRemoved?: () => void;
   stackIndex?: number;
   stackSize?: number;
 }
 
 function NotificationCard({
   busyNotificationId,
+  isRemoving = false,
   notification,
   onMarkRead,
+  onRemoved,
   stackIndex,
   stackSize = 0,
 }: NotificationCardProps) {
+  const presence = usePresence(!isRemoving, {
+    exitDuration: motionDurations.smooth,
+    onExitComplete: onRemoved,
+  });
   const isStacked = stackIndex !== undefined;
   const stackStyle = isStacked
     ? ({
-        "--notification-stack-scale": Math.max(0.88, 1 - stackIndex * 0.045),
+        "--notification-stack-offset": `${Math.min(stackIndex, 2) * 4}px`,
+        "--notification-stack-scale": Math.max(0.94, 1 - stackIndex * 0.025),
         zIndex: stackSize - stackIndex,
       } as CSSProperties)
     : undefined;
 
+  if (!presence.isMounted) return null;
+
   return (
     <li
-      className={[
-        "motion-record rounded-2xl border p-5 shadow-sm transition duration-[180ms] ease-[var(--ease-standard)] sm:p-6",
-        isStacked ? "notification-stack-card" : "mt-4",
-        notification.unread
-          ? "border-primary/30 bg-primary-soft"
-          : "border-border bg-surface-elevated",
-      ].join(" ")}
-      style={stackStyle}
+      className="motion-removable"
+      data-motion-state={presence.motionState}
+      inert={presence.motionState === "closed"}
+      onTransitionEnd={presence.onTransitionEnd}
     >
+      <div
+        className={[
+          "motion-removable-inner motion-record rounded-2xl border p-5 shadow-sm transition-colors duration-[var(--motion-normal)] ease-[var(--ease-standard)] sm:p-6",
+          isStacked ? "notification-stack-card" : "",
+          notification.unread
+            ? "border-primary/30 bg-primary-soft"
+            : "border-border bg-surface-elevated",
+        ].join(" ")}
+        style={stackStyle}
+      >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-background px-3 py-1 text-xs font-semibold text-foreground-muted">
               {kindLabels[notification.kind]}
             </span>
-            {notification.unread ? (
-              <span className="rounded-full bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground">
-                Unread
-              </span>
-            ) : (
-              <span className="text-xs font-medium text-muted">Read</span>
-            )}
+            <span
+              className={[
+                "motion-status-badge rounded-full px-2.5 py-1 text-xs",
+                notification.unread
+                  ? "bg-primary font-bold text-primary-foreground"
+                  : "bg-surface-muted font-medium text-muted",
+              ].join(" ")}
+            >
+              {notification.unread ? "Unread" : "Read"}
+            </span>
           </div>
           <h2 className="mt-3 text-lg font-semibold text-foreground">{notification.title}</h2>
           <p className="mt-2 text-sm leading-6 text-foreground-muted">{notification.message}</p>
@@ -93,6 +116,7 @@ function NotificationCard({
           </button>
         ) : null}
       </div>
+      </div>
     </li>
   );
 }
@@ -101,11 +125,15 @@ function NotificationStack({
   busyNotificationId,
   notifications,
   onMarkRead,
+  onRemoved,
+  removingNotificationIds,
   unreadCount,
 }: {
   busyNotificationId: number | null;
   notifications: OperationalNotification[];
   onMarkRead: (notification: OperationalNotification) => void;
+  onRemoved: (notificationId: number) => void;
+  removingNotificationIds: Set<number>;
   unreadCount: number;
 }) {
   return (
@@ -121,9 +149,11 @@ function NotificationStack({
         {notifications.map((notification, index) => (
           <NotificationCard
             busyNotificationId={busyNotificationId}
+            isRemoving={removingNotificationIds.has(notification.id)}
             key={notification.id}
             notification={notification}
             onMarkRead={onMarkRead}
+            onRemoved={() => onRemoved(notification.id)}
             stackIndex={index}
             stackSize={notifications.length}
           />
@@ -145,11 +175,13 @@ export function NotificationsPage() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [busyNotificationId, setBusyNotificationId] = useState<number | null>(null);
   const [isMarkingAll, setIsMarkingAll] = useState(false);
+  const [removingNotificationIds, setRemovingNotificationIds] = useState<Set<number>>(() => new Set());
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -177,6 +209,7 @@ export function NotificationsPage() {
       .finally(() => {
         if (!controller.signal.aborted) {
           setIsLoading(false);
+          setHasLoaded(true);
         }
       });
 
@@ -194,7 +227,7 @@ export function NotificationsPage() {
       await markNotificationRead(notification.id);
       setUnreadCount((count) => Math.max(0, count - 1));
       if (unreadOnly) {
-        setNotifications((current) => current.filter((item) => item.id !== notification.id));
+        setRemovingNotificationIds((current) => new Set(current).add(notification.id));
       } else {
         setNotifications((current) =>
           current.map((item) =>
@@ -228,7 +261,7 @@ export function NotificationsPage() {
       const response = await markAllNotificationsRead();
       setUnreadCount(0);
       if (unreadOnly) {
-        setNotifications([]);
+        setRemovingNotificationIds(new Set(notifications.map((notification) => notification.id)));
       } else {
         const now = new Date().toISOString();
         setNotifications((current) =>
@@ -248,40 +281,41 @@ export function NotificationsPage() {
     }
   }
 
-  if (isLoading) {
-    return (
-      <div className="mx-auto max-w-5xl p-6 sm:p-10 lg:p-12">
-        <LoadingState
-          message="Loading operational alerts and status updates permitted for your account."
-          title="Loading notifications…"
-        />
-      </div>
-    );
-  }
-
-  if (loadError) {
-    return (
-      <div className="mx-auto max-w-5xl p-6 sm:p-10 lg:p-12">
-        <ErrorState
-          action={(
-            <button
-              className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary-hover"
-              onClick={() => setReloadKey((key) => key + 1)}
-              type="button"
-            >
-              Retry
-            </button>
-          )}
-          message={loadError}
-          title="Notifications unavailable"
-        />
-      </div>
-    );
+  function finishNotificationRemoval(notificationId: number) {
+    setNotifications((current) => current.filter((item) => item.id !== notificationId));
+    setRemovingNotificationIds((current) => {
+      const next = new Set(current);
+      next.delete(notificationId);
+      return next;
+    });
   }
 
   return (
-    <div className="mx-auto max-w-5xl p-6 sm:p-10 lg:p-12">
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+    <div aria-busy={isLoading} className="mx-auto max-w-5xl p-6 sm:p-10 lg:p-12">
+      <MotionSwap stateKey={!hasLoaded ? "loading" : loadError ? "error" : "content"}>
+        {!hasLoaded ? (
+          <LoadingState
+            message="Loading operational alerts and status updates permitted for your account."
+            title="Loading notifications…"
+          />
+        ) : loadError ? (
+          <ErrorState
+            action={(
+              <button
+                className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary-hover"
+                onClick={() => setReloadKey((key) => key + 1)}
+                type="button"
+              >
+                Retry
+              </button>
+            )}
+            message={loadError}
+            title="Notifications unavailable"
+          />
+        ) : (
+          <div>
+            {isLoading ? <p className="mb-4 text-sm text-muted" role="status">Updating notifications…</p> : null}
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">
             Operational awareness
@@ -332,6 +366,7 @@ export function NotificationsPage() {
       ) : null}
 
       <div className="mt-6" id="notification-inbox">
+        <MotionSwap stateKey={notifications.length === 0 ? "empty" : "populated"}>
         {notifications.length === 0 ? (
           <EmptyState
             message={
@@ -347,23 +382,31 @@ export function NotificationsPage() {
               busyNotificationId={busyNotificationId}
               notifications={notifications.slice(0, 3)}
               onMarkRead={(notification) => void handleMarkRead(notification)}
+              onRemoved={finishNotificationRemoval}
+              removingNotificationIds={removingNotificationIds}
               unreadCount={unreadCount}
             />
             {notifications.length > 3 ? (
-              <ol aria-label="Earlier notifications" className="mt-8">
+              <ol aria-label="Earlier notifications" className="mt-8 grid gap-4">
                 {notifications.slice(3).map((notification) => (
                   <NotificationCard
                     busyNotificationId={busyNotificationId}
+                    isRemoving={removingNotificationIds.has(notification.id)}
                     key={notification.id}
                     notification={notification}
                     onMarkRead={(item) => void handleMarkRead(item)}
+                    onRemoved={() => finishNotificationRemoval(notification.id)}
                   />
                 ))}
               </ol>
             ) : null}
           </div>
         )}
+        </MotionSwap>
       </div>
+          </div>
+        )}
+      </MotionSwap>
     </div>
   );
 }

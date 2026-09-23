@@ -356,6 +356,9 @@ public class ProductionTaskService {
             String workAssignment,
             String workNotes) {
         ProductionTask task = requireTask(taskId);
+        if (task.status() == ProductionTaskStatus.COMPLETED) {
+            throw new ProductionTaskCompletedException();
+        }
         ValidatedWorkDetails validated = validateWorkDetails(workDetails, workAssignment, workNotes);
 
         productionTaskRepository.saveWorkDetails(

@@ -54,8 +54,7 @@ public class JdbcReportRepository implements ReportRepository {
                        SUM(CASE WHEN status = 'ACTIVE' THEN 1 ELSE 0 END) AS active_count,
                        SUM(CASE WHEN status = 'ACTIVE' AND current_quantity <= low_stock_threshold
                                 THEN 1 ELSE 0 END) AS low_stock_count,
-                       SUM(CASE WHEN status = 'INACTIVE' THEN 1 ELSE 0 END) AS inactive_count,
-                       SUM(CASE WHEN status = 'DISCONTINUED' THEN 1 ELSE 0 END) AS discontinued_count
+                       SUM(CASE WHEN status = 'INACTIVE' THEN 1 ELSE 0 END) AS inactive_count
                 FROM inventory_materials
                 """,
                 (resultSet, rowNumber) -> new ReportSection(
@@ -66,8 +65,7 @@ public class JdbcReportRepository implements ReportRepository {
                                 metric("totalMaterials", "Materials", resultSet.getLong("total_materials")),
                                 metric("activeMaterials", "Active", resultSet.getLong("active_count")),
                                 metric("lowStock", "Low stock", resultSet.getLong("low_stock_count")),
-                                metric("inactiveMaterials", "Inactive", resultSet.getLong("inactive_count")),
-                                metric("discontinuedMaterials", "Discontinued", resultSet.getLong("discontinued_count")))));
+                                metric("inactiveMaterials", "Inactive", resultSet.getLong("inactive_count")))));
     }
 
     @Override

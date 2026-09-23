@@ -254,7 +254,7 @@ class CrossModuleEndToEndIntegrationTests {
                         .cookie(production))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.allMaterialsAvailable").value(true))
-                .andExpect(jsonPath("$.materials[0].available").value(true));
+                .andExpect(jsonPath("$.materials[0].availabilityState").value("AVAILABLE"));
 
         mockMvc.perform(post("/api/production/tasks/{taskId}/start", productionTaskId)
                         .cookie(production))
@@ -302,6 +302,20 @@ class CrossModuleEndToEndIntegrationTests {
         assertThat(jdbcTemplate.queryForObject(
                         "SELECT status FROM orders WHERE id = ?", String.class, orderId))
                 .isEqualTo("READY_FOR_DELIVERY");
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM order_status_history WHERE order_id = ? AND from_status = 'IN_PRODUCTION' AND to_status = 'READY_FOR_DELIVERY'",
+                        Integer.class, orderId))
+                .isEqualTo(1);
+
+        mockMvc.perform(get("/api/deliveries/eligible-orders").cookie(sales))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].orderId").value(orderId))
+                .andExpect(jsonPath("$[0].readyForDelivery").value(true))
+                .andExpect(jsonPath("$[0].items[0].productId").value(productId))
+                .andExpect(jsonPath("$[0].items[0].variantId").value(variantId))
+                .andExpect(jsonPath("$[0].items[0].productName")
+                        .value("TGMS81 Integration Shirt"));
 
         mockMvc.perform(get("/api/deliveries/eligible-orders/{orderId}", orderId).cookie(sales))
                 .andExpect(status().isOk())
@@ -332,6 +346,9 @@ class CrossModuleEndToEndIntegrationTests {
         assertThat(jdbcTemplate.queryForObject(
                         "SELECT order_id FROM deliveries WHERE id = ?", Long.class, deliveryId))
                 .isEqualTo(orderId);
+        mockMvc.perform(get("/api/deliveries/eligible-orders").cookie(sales))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.orderId == %d)]".formatted(orderId)).isEmpty());
 
         // Delivery -> Customer tracking: only the owning Customer reads the delivery progress.
         mockMvc.perform(get("/api/deliveries/mine/orders/{orderId}/tracking", orderId)

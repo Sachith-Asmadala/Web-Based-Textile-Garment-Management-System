@@ -13,21 +13,26 @@ public class AuthService {
     private final UserAccountRepository userAccountRepository;
     private final PasswordEncoder passwordEncoder;
     private final PasswordPolicy passwordPolicy;
+    private final EmailVerificationService emailVerificationService;
     private final String dummyPasswordHash;
 
     public AuthService(
             UserAccountRepository userAccountRepository,
             PasswordEncoder passwordEncoder,
-            PasswordPolicy passwordPolicy) {
+            PasswordPolicy passwordPolicy,
+            EmailVerificationService emailVerificationService) {
         this.userAccountRepository = userAccountRepository;
         this.passwordEncoder = passwordEncoder;
         this.passwordPolicy = passwordPolicy;
+        this.emailVerificationService = emailVerificationService;
         this.dummyPasswordHash = passwordEncoder.encode("tgms-invalid-password-placeholder");
     }
 
     @Transactional
     public UserAccount registerCustomer(String fullName, String email, String password) {
-        return createAccount(fullName, email, password, UserRole.CUSTOMER);
+        UserAccount account = createAccount(fullName, email, password, UserRole.CUSTOMER);
+        emailVerificationService.issueForRegisteredCustomer(account);
+        return account;
     }
 
     @Transactional
@@ -68,6 +73,11 @@ public class AuthService {
 
         if (account.isEmpty() || !account.get().active() || !passwordMatches) {
             throw new InvalidCredentialsException();
+        }
+
+        if (account.get().role() == UserRole.CUSTOMER
+                && !userAccountRepository.isEmailVerified(account.get().id())) {
+            throw new EmailNotVerifiedException();
         }
 
         return account.get();

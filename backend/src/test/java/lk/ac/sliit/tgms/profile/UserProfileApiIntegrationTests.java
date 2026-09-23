@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -30,6 +31,9 @@ class UserProfileApiIntegrationTests {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     private MockMvc mockMvc;
 
@@ -121,6 +125,132 @@ class UserProfileApiIntegrationTests {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.error.fields.fullName").exists());
+
+        mockMvc.perform(put("/api/profile/password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"currentPassword":"secure-pass-123","newPassword":"new-secure-pass-456"}
+                                """))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void authenticatedUserCanChangeOwnPasswordUsingCurrentPassword() throws Exception {
+        String email = "password-change@example.com";
+        String currentPassword = "secure-pass-123";
+        String newPassword = "new-secure-pass-456";
+        Cookie session = registerAndLogin("Password Customer", email, currentPassword);
+        Long userId = jdbcTemplate.queryForObject(
+                "SELECT id FROM users WHERE email = ?", Long.class, email);
+        String originalHash = jdbcTemplate.queryForObject(
+                "SELECT password_hash FROM users WHERE email = ?", String.class, email);
+        Integer originalSessionVersion = jdbcTemplate.queryForObject(
+                "SELECT session_version FROM users WHERE email = ?", Integer.class, email);
+        mockMvc.perform(get("/api/profile").cookie(session))
+                .andExpect(status().isOk());
+        jdbcTemplate.update(
+                """
+                INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+                """,
+                userId,
+                "a".repeat(64));
+
+        MvcResult passwordChange = mockMvc.perform(put("/api/profile/password")
+                        .cookie(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(("""
+                                {"currentPassword":"%s","newPassword":"%s"}
+                                """).formatted(currentPassword, newPassword)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message")
+                        .value("Password changed successfully. Please sign in again."))
+                .andReturn();
+        Cookie clearedSession = passwordChange.getResponse()
+                .getCookie(AuthCookieService.COOKIE_NAME);
+        assertThat(clearedSession).isNotNull();
+        assertThat(clearedSession.getMaxAge()).isZero();
+
+        String updatedHash = jdbcTemplate.queryForObject(
+                "SELECT password_hash FROM users WHERE email = ?", String.class, email);
+        assertThat(updatedHash).isNotEqualTo(originalHash);
+        assertThat(passwordEncoder.matches(newPassword, updatedHash)).isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT session_version FROM users WHERE email = ?", Integer.class, email))
+                .isEqualTo(originalSessionVersion + 1);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*) FROM password_reset_tokens
+                WHERE user_id = ? AND used_at IS NOT NULL
+                """,
+                Integer.class,
+                userId)).isEqualTo(1);
+
+        mockMvc.perform(get("/api/profile").cookie(session))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(("""
+                                {"email":"%s","password":"%s"}
+                                """).formatted(email, currentPassword)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("INVALID_CREDENTIALS"));
+
+        MvcResult newLogin = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(("""
+                                {"email":"%s","password":"%s"}
+                                """).formatted(email, newPassword)))
+                .andExpect(status().isOk())
+                .andReturn();
+        Cookie newSession = newLogin.getResponse().getCookie(AuthCookieService.COOKIE_NAME);
+        assertThat(newSession).isNotNull();
+        mockMvc.perform(get("/api/profile").cookie(newSession))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void passwordChangeRejectsWrongCurrentPasswordWeakPasswordAndPasswordReuse() throws Exception {
+        String email = "password-validation@example.com";
+        String currentPassword = "secure-pass-123";
+        Cookie session = registerAndLogin("Password Validation", email, currentPassword);
+        String originalHash = jdbcTemplate.queryForObject(
+                "SELECT password_hash FROM users WHERE email = ?", String.class, email);
+
+        mockMvc.perform(put("/api/profile/password")
+                        .cookie(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"currentPassword":"wrong-password","newPassword":"new-secure-pass-456"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.error.fields.currentPassword")
+                        .value("Current password is incorrect."));
+
+        mockMvc.perform(put("/api/profile/password")
+                        .cookie(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(("""
+                                {"currentPassword":"%s","newPassword":"short"}
+                                """).formatted(currentPassword)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.fields.newPassword").exists());
+
+        mockMvc.perform(put("/api/profile/password")
+                        .cookie(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(("""
+                                {"currentPassword":"%s","newPassword":"%s"}
+                                """).formatted(currentPassword, currentPassword)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.fields.newPassword")
+                        .value("New password must be different from the current password."));
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT password_hash FROM users WHERE email = ?", String.class, email))
+                .isEqualTo(originalHash);
     }
 
     private Cookie registerAndLogin(String fullName, String email, String password) throws Exception {
@@ -144,5 +274,7 @@ class UserProfileApiIntegrationTests {
                                 {"fullName":"%s","email":"%s","password":"%s"}
                                 """).formatted(fullName, email, password)))
                 .andExpect(status().isCreated());
+        jdbcTemplate.update(
+                "UPDATE users SET email_verified_at = CURRENT_TIMESTAMP WHERE email = ?", email);
     }
 }

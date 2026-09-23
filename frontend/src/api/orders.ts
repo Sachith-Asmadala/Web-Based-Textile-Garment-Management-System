@@ -32,10 +32,12 @@ export interface CreatedOrderItem {
   productId: number;
   variantId: number;
   productName: string;
+  productImageUrl?: string | null;
   quantity: number;
   selectedSize: string;
   selectedColor: string;
   unitPriceSnapshot: string;
+  lineTotal: string;
 }
 
 export interface CreateOrderResponse {
@@ -46,6 +48,7 @@ export interface CreateOrderResponse {
   customer: OrderCustomerOption;
   status: OrderStatus;
   createdAt: string;
+  totalAmount: string;
   items: CreatedOrderItem[];
 }
 
@@ -59,6 +62,8 @@ export interface OrderSummary {
   createdAt: string;
   updatedAt: string;
   itemCount: number;
+  previewProductName?: string | null;
+  previewProductImageUrl?: string | null;
   totalAmount: string;
 }
 
@@ -67,6 +72,7 @@ export interface OrderDetailItem {
   productId: number;
   variantId: number;
   productName: string;
+  productImageUrl?: string | null;
   quantity: number;
   selectedSize: string;
   selectedColor: string;
@@ -157,6 +163,8 @@ export interface OrderHandoffItem {
   orderItemId: number;
   productId: number;
   variantId: number;
+  productName?: string;
+  productImageUrl?: string | null;
   quantity: number;
   selectedSize: string;
   selectedColor: string;

@@ -197,9 +197,10 @@ class DeliveryRecordsApiIntegrationTests {
         jdbcTemplate.update(
                 """
                 INSERT INTO order_items (
-                    id, order_id, product_id, variant_id, quantity,
+                    id, order_id, product_id, variant_id, product_name_snapshot,
+                    product_image_url_snapshot, quantity,
                     selected_size, selected_color, unit_price_snapshot
-                ) VALUES (?, ?, 99642, 99643, 2, 'M', 'Blue', 2500.00)
+                ) VALUES (?, ?, 99642, 99643, 'Delivery record product', NULL, 2, 'M', 'Blue', 2500.00)
                 """,
                 itemId, id);
     }

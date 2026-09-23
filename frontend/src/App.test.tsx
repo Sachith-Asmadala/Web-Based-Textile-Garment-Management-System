@@ -10,8 +10,10 @@ import {
   loginUser,
   logoutUser,
   registerCustomer,
+  resendEmailVerification,
   requestPasswordReset,
   resetPassword,
+  verifyCustomerEmail,
   type AuthUser,
   type UserRole,
 } from "./api/auth";
@@ -19,39 +21,43 @@ import { getRoleAccess, type InternalRole } from "./api/roleAccess";
 import { getDashboardReport } from "./api/reports";
 import {
   createProduct,
-  discontinueProduct,
+  deleteProduct,
   getCatalogProduct,
   getCatalogProducts,
+  getManagedProducts,
   getProduct,
+  uploadProductImage,
   updateProduct,
   type CreateProductResponse,
-  type DiscontinueProductResponse,
+  type DeleteProductResponse,
   type UpdateProductResponse,
 } from "./api/products";
 import {
-  archiveMaterialSupply,
   createMaterialSupply,
+  deleteMaterialSupply,
   getMaterialSupply,
   getMaterialSupplies,
   updateMaterialSupply,
   type CreateMaterialSupplyResponse,
-  type ArchiveMaterialSupplyResponse,
+  type DeleteMaterialSupplyResponse,
   type MaterialSupply,
   type MaterialSupplyListItem,
   type UpdateMaterialSupplyResponse,
 } from "./api/materialSupplies";
 import {
-  archiveInventoryMaterial,
   consumeInventoryMaterial,
   createInventoryMaterial,
+  deleteInventoryMaterial,
   getInventoryMaterial,
   getInventoryMaterials,
   getLowStockInventoryMaterials,
+  receiveInventoryMaterial,
   updateInventoryMaterial,
-  type ArchiveInventoryMaterialResponse,
   type ConsumeInventoryMaterialResponse,
   type CreateInventoryMaterialResponse,
+  type DeleteInventoryMaterialResponse,
   type InventoryMaterial,
+  type ReceiveInventoryMaterialResponse,
   type UpdateInventoryMaterialResponse,
 } from "./api/inventoryMaterials";
 import {
@@ -78,6 +84,7 @@ import {
   quotationListPagePath,
   newInventoryMaterialPagePath,
   productCatalogPagePath,
+  productManagementPagePath,
   productionTaskCreatePagePath,
   getProductionTaskDetailPagePath,
   getProductDetailPagePath,
@@ -94,8 +101,10 @@ vi.mock("./api/auth", () => ({
   loginUser: vi.fn(),
   logoutUser: vi.fn(),
   registerCustomer: vi.fn(),
+  resendEmailVerification: vi.fn(),
   requestPasswordReset: vi.fn(),
   resetPassword: vi.fn(),
+  verifyCustomerEmail: vi.fn(),
   getApiErrorMessage: (error: unknown, fallback: string) =>
     error instanceof Error ? error.message : fallback,
 }));
@@ -116,10 +125,12 @@ vi.mock("./api/reports", () => ({
 }));
 vi.mock("./api/products", () => ({
   createProduct: vi.fn(),
-  discontinueProduct: vi.fn(),
+  deleteProduct: vi.fn(),
   getCatalogProduct: vi.fn(),
   getCatalogProducts: vi.fn(),
+  getManagedProducts: vi.fn(),
   getProduct: vi.fn(),
+  uploadProductImage: vi.fn(),
   updateProduct: vi.fn(),
   getProductApiError: (error: unknown, fallback: string) => {
     const details = typeof error === "object" && error !== null
@@ -134,7 +145,7 @@ vi.mock("./api/products", () => ({
   },
 }));
 vi.mock("./api/materialSupplies", () => ({
-  archiveMaterialSupply: vi.fn(),
+  deleteMaterialSupply: vi.fn(),
   createMaterialSupply: vi.fn(),
   getMaterialSupply: vi.fn(),
   getMaterialSupplies: vi.fn(),
@@ -152,12 +163,13 @@ vi.mock("./api/materialSupplies", () => ({
   },
 }));
 vi.mock("./api/inventoryMaterials", () => ({
-  archiveInventoryMaterial: vi.fn(),
   consumeInventoryMaterial: vi.fn(),
   createInventoryMaterial: vi.fn(),
+  deleteInventoryMaterial: vi.fn(),
   getInventoryMaterial: vi.fn(),
   getInventoryMaterials: vi.fn(),
   getLowStockInventoryMaterials: vi.fn(),
+  receiveInventoryMaterial: vi.fn(),
   updateInventoryMaterial: vi.fn(),
   getInventoryMaterialApiError: (error: unknown, fallback: string) => {
     const details = typeof error === "object" && error !== null
@@ -193,26 +205,31 @@ const mockedLoginUser = vi.mocked(loginUser);
 const mockedLogoutUser = vi.mocked(logoutUser);
 const mockedRegisterCustomer = vi.mocked(registerCustomer);
 const mockedRequestPasswordReset = vi.mocked(requestPasswordReset);
+const mockedResendEmailVerification = vi.mocked(resendEmailVerification);
 const mockedResetPassword = vi.mocked(resetPassword);
+const mockedVerifyCustomerEmail = vi.mocked(verifyCustomerEmail);
 const mockedGetRoleAccess = vi.mocked(getRoleAccess);
 const mockedGetDashboardReport = vi.mocked(getDashboardReport);
 const mockedCreateProduct = vi.mocked(createProduct);
-const mockedDiscontinueProduct = vi.mocked(discontinueProduct);
+const mockedUploadProductImage = vi.mocked(uploadProductImage);
+const mockedDeleteProduct = vi.mocked(deleteProduct);
 const mockedGetCatalogProduct = vi.mocked(getCatalogProduct);
 const mockedGetCatalogProducts = vi.mocked(getCatalogProducts);
+const mockedGetManagedProducts = vi.mocked(getManagedProducts);
 const mockedGetProduct = vi.mocked(getProduct);
 const mockedUpdateProduct = vi.mocked(updateProduct);
 const mockedCreateMaterialSupply = vi.mocked(createMaterialSupply);
-const mockedArchiveMaterialSupply = vi.mocked(archiveMaterialSupply);
+const mockedDeleteMaterialSupply = vi.mocked(deleteMaterialSupply);
 const mockedGetMaterialSupply = vi.mocked(getMaterialSupply);
 const mockedGetMaterialSupplies = vi.mocked(getMaterialSupplies);
 const mockedUpdateMaterialSupply = vi.mocked(updateMaterialSupply);
-const mockedArchiveInventoryMaterial = vi.mocked(archiveInventoryMaterial);
 const mockedConsumeInventoryMaterial = vi.mocked(consumeInventoryMaterial);
 const mockedCreateInventoryMaterial = vi.mocked(createInventoryMaterial);
+const mockedDeleteInventoryMaterial = vi.mocked(deleteInventoryMaterial);
 const mockedGetInventoryMaterial = vi.mocked(getInventoryMaterial);
 const mockedGetInventoryMaterials = vi.mocked(getInventoryMaterials);
 const mockedGetLowStockInventoryMaterials = vi.mocked(getLowStockInventoryMaterials);
+const mockedReceiveInventoryMaterial = vi.mocked(receiveInventoryMaterial);
 const mockedUpdateInventoryMaterial = vi.mocked(updateInventoryMaterial);
 const mockedGetSupplierProfile = vi.mocked(getSupplierProfile);
 const mockedSaveSupplierProfile = vi.mocked(saveSupplierProfile);
@@ -281,6 +298,7 @@ const updatedProductResponse: UpdateProductResponse = {
   product: {
     ...catalogProduct,
     name: "Updated Crew Neck",
+    status: "INACTIVE",
     variants: [
       {
         ...catalogProduct.variants[0],
@@ -293,16 +311,9 @@ const updatedProductResponse: UpdateProductResponse = {
   },
 };
 
-const discontinuedProductResponse: DiscontinueProductResponse = {
-  message: "Garment product discontinued successfully.",
-  product: {
-    ...catalogProduct,
-    status: "DISCONTINUED",
-    variants: catalogProduct.variants.map((variant) => ({
-      ...variant,
-      status: "DISCONTINUED",
-    })),
-  },
+const deletedProductResponse: DeleteProductResponse = {
+  message: "Garment product deleted successfully.",
+  productId: catalogProduct.id,
 };
 
 const supplierProfile: SupplierProfile = {
@@ -383,6 +394,17 @@ const consumedInventoryMaterialResponse: ConsumeInventoryMaterialResponse = {
   material: consumedInventoryMaterial,
 };
 
+const receivedInventoryMaterial: InventoryMaterial = {
+  ...linkedInventoryMaterial,
+  currentQuantity: "970.250",
+  updatedAt: "2026-08-23T09:05:00Z",
+};
+
+const receivedInventoryMaterialResponse: ReceiveInventoryMaterialResponse = {
+  message: "Supplier material received into inventory successfully.",
+  material: receivedInventoryMaterial,
+};
+
 const updatedInventoryMaterial: InventoryMaterial = {
   ...linkedInventoryMaterial,
   materialName: "Updated cotton twill",
@@ -396,15 +418,9 @@ const updatedInventoryMaterialResponse: UpdateInventoryMaterialResponse = {
   material: updatedInventoryMaterial,
 };
 
-const archivedInventoryMaterial: InventoryMaterial = {
-  ...linkedInventoryMaterial,
-  status: "DISCONTINUED",
-  updatedAt: "2026-08-23T10:30:00Z",
-};
-
-const archivedInventoryMaterialResponse: ArchiveInventoryMaterialResponse = {
-  message: "Inventory material archived successfully.",
-  material: archivedInventoryMaterial,
+const deletedInventoryMaterialResponse: DeleteInventoryMaterialResponse = {
+  message: "Inventory material deleted successfully.",
+  materialId: linkedInventoryMaterial.id,
 };
 
 const roleRoutes: Array<[InternalRole, string]> = [
@@ -446,6 +462,7 @@ describe("App authentication", () => {
     });
     mockedGetCatalogProduct.mockResolvedValue(catalogProduct);
     mockedGetCatalogProducts.mockResolvedValue([]);
+    mockedGetManagedProducts.mockResolvedValue([]);
     mockedGetProduct.mockResolvedValue(catalogProduct);
     mockedGetSupplierProfile.mockRejectedValue(Object.assign(
       new Error("No supplier profile exists for this account."),
@@ -453,12 +470,12 @@ describe("App authentication", () => {
     ));
     mockedSaveSupplierProfile.mockRejectedValue(new Error("Unexpected supplier save."));
     mockedCreateMaterialSupply.mockRejectedValue(new Error("Unexpected material supply save."));
-    mockedArchiveMaterialSupply.mockRejectedValue(new Error("Unexpected material supply archive."));
+    mockedDeleteMaterialSupply.mockRejectedValue(new Error("Unexpected material supply deletion."));
     mockedGetMaterialSupply.mockRejectedValue(new Error("Unexpected material supply load."));
     mockedGetMaterialSupplies.mockResolvedValue([]);
     mockedUpdateMaterialSupply.mockRejectedValue(new Error("Unexpected material supply update."));
-    mockedArchiveInventoryMaterial.mockRejectedValue(
-      new Error("Unexpected inventory material archive."),
+    mockedDeleteInventoryMaterial.mockRejectedValue(
+      new Error("Unexpected inventory material deletion."),
     );
     mockedConsumeInventoryMaterial.mockRejectedValue(
       new Error("Unexpected inventory stock usage."),
@@ -469,6 +486,9 @@ describe("App authentication", () => {
     mockedGetInventoryMaterial.mockRejectedValue(new Error("Unexpected inventory material load."));
     mockedGetInventoryMaterials.mockResolvedValue([]);
     mockedGetLowStockInventoryMaterials.mockResolvedValue({ count: 0, materials: [] });
+    mockedReceiveInventoryMaterial.mockRejectedValue(
+      new Error("Unexpected inventory stock receipt."),
+    );
     mockedUpdateInventoryMaterial.mockRejectedValue(new Error("Unexpected inventory material update."));
     mockedAxios.get.mockResolvedValue({ data: { status: "ok" } });
   });
@@ -515,7 +535,7 @@ describe("App authentication", () => {
 
   it("registers a customer without sending a selectable role", async () => {
     mockedRegisterCustomer.mockResolvedValue({
-      message: "Account created successfully.",
+      message: "Account created. Check your email for the verification code.",
       user: customer,
     });
     const user = userEvent.setup();
@@ -531,12 +551,42 @@ describe("App authentication", () => {
     await user.click(screen.getByRole("button", { name: "Create customer account" }));
 
     expect(
-      await screen.findByRole("heading", { name: "Registration complete" }),
+      await screen.findByRole("heading", { name: "Verify your email" }),
     ).toBeInTheDocument();
     expect(mockedRegisterCustomer).toHaveBeenCalledWith({
       fullName: customer.fullName,
       email: customer.email,
       password: "secure-pass-123",
+    });
+    expect(screen.getByLabelText("Email address")).toHaveValue(customer.email);
+  });
+
+  it("verifies a customer email and offers a throttled resend action", async () => {
+    mockedVerifyCustomerEmail.mockResolvedValue({
+      message: "Email verified successfully. You can now sign in.",
+    });
+    mockedResendEmailVerification.mockResolvedValue({
+      message: "If the account is eligible, a new verification code will be sent.",
+    });
+    const user = userEvent.setup();
+    renderApp("/verify-email?email=customer%40example.com");
+
+    await user.click(screen.getByRole("button", { name: "Send a new code" }));
+    expect(await screen.findByText(
+      /If the account is eligible, a new verification code will be sent\. Check customer@example\.com's Inbox and Spam folder\./,
+    )).toBeInTheDocument();
+    expect(mockedResendEmailVerification).toHaveBeenCalledWith({
+      email: "customer@example.com",
+    });
+
+    await user.type(screen.getByLabelText("Verification code"), "428196");
+    await user.click(screen.getByRole("button", { name: "Verify email" }));
+
+    expect(await screen.findByRole("heading", { name: "Email verified" }))
+      .toBeInTheDocument();
+    expect(mockedVerifyCustomerEmail).toHaveBeenCalledWith({
+      email: "customer@example.com",
+      code: "428196",
     });
   });
 
@@ -772,6 +822,7 @@ describe("App authentication", () => {
     await user.type(screen.getByLabelText("Color"), "White");
     await user.type(screen.getByLabelText("Price"), "3990.00");
     await user.selectOptions(screen.getByLabelText("Availability"), "UNAVAILABLE");
+    await user.selectOptions(screen.getByLabelText("Product status"), "INACTIVE");
     await user.click(screen.getByRole("button", { name: "Save garment product" }));
 
     expect(await screen.findByText("Product saved")).toBeInTheDocument();
@@ -779,11 +830,76 @@ describe("App authentication", () => {
     expect(mockedCreateProduct).toHaveBeenCalledWith({
       name: "Oxford Shirt",
       category: "Formal Wear",
-      size: "L",
-      color: "White",
-      price: "3990.00",
-      availability: "UNAVAILABLE",
+      variants: [{
+        size: "L",
+        color: "White",
+        price: "3990.00",
+        availability: "UNAVAILABLE",
+      }],
     });
+  });
+
+  it("uploads a local photo and saves multiple independently priced variants", async () => {
+    mockedGetCurrentUser.mockResolvedValue({ ...customer, role: "SALES_OFFICER" });
+    const secondVariant = {
+      ...savedProductResponse.product.variants[0],
+      id: 74,
+      size: "XL",
+      color: "Navy",
+      price: "4490.00",
+      status: "AVAILABLE" as const,
+    };
+    mockedUploadProductImage.mockResolvedValue({
+      message: "Product photo uploaded successfully.",
+      imageUrl: "/api/product-images/123e4567-e89b-12d3-a456-426614174000.jpg",
+      mediaType: "image/jpeg",
+      size: 3,
+    });
+    mockedCreateProduct.mockResolvedValue({
+      ...savedProductResponse,
+      product: {
+        ...savedProductResponse.product,
+        imageUrl: "/api/product-images/123e4567-e89b-12d3-a456-426614174000.jpg",
+        variants: [savedProductResponse.product.variants[0], secondVariant],
+      },
+    });
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: vi.fn(() => "blob:product-preview"),
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: vi.fn(),
+    });
+
+    const user = userEvent.setup();
+    renderApp(newProductPagePath);
+    await user.type(await screen.findByLabelText("Product name"), "Oxford Shirt");
+    await user.type(screen.getByLabelText("Category"), "Formal Wear");
+    await user.type(screen.getByLabelText("Size"), "L");
+    await user.type(screen.getByLabelText("Color"), "White");
+    await user.type(screen.getByLabelText("Price"), "3990.00");
+    await user.upload(
+      screen.getByLabelText("Choose a local product photo"),
+      new File([new Uint8Array([0xff, 0xd8, 0xff])], "shirt.jpg", { type: "image/jpeg" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Add another option" }));
+    await user.type(screen.getByLabelText("Size 2"), "XL");
+    await user.type(screen.getByLabelText("Color 2"), "Navy");
+    await user.type(screen.getByLabelText("Price 2"), "4490.00");
+    await user.click(screen.getByRole("button", { name: "Save garment product" }));
+
+    expect(mockedUploadProductImage).toHaveBeenCalledWith(expect.any(File));
+    expect(mockedCreateProduct).toHaveBeenCalledWith({
+      name: "Oxford Shirt",
+      category: "Formal Wear",
+      imageUrl: "/api/product-images/123e4567-e89b-12d3-a456-426614174000.jpg",
+      variants: [
+        { size: "L", color: "White", price: "3990.00", availability: "AVAILABLE" },
+        { size: "XL", color: "Navy", price: "4490.00", availability: "AVAILABLE" },
+      ],
+    });
+    expect(await screen.findByText(/2 variants were saved successfully/i)).toBeInTheDocument();
   });
 
   it("blocks incomplete and invalid product values before calling the API", async () => {
@@ -987,6 +1103,7 @@ describe("App authentication", () => {
     expect(screen.getByLabelText("Size")).toHaveValue("M");
     expect(screen.getByLabelText("Color")).toHaveValue("Navy Blue");
     expect(screen.getByLabelText("Price")).toHaveValue("2499.90");
+    expect(screen.getByLabelText("Product status")).toHaveValue("ACTIVE");
 
     await user.clear(screen.getByLabelText("Product name"));
     await user.type(screen.getByLabelText("Product name"), " Updated Crew Neck ");
@@ -1011,10 +1128,12 @@ describe("App authentication", () => {
       variantId: catalogProduct.variants[0].id,
       name: "Updated Crew Neck",
       category: catalogProduct.category.name,
+      description: catalogProduct.description,
       size: "L",
       color: "Forest Green",
       price: "2799.50",
       availability: "UNAVAILABLE",
+      status: "INACTIVE",
     });
     expect(screen.getByLabelText("Product name")).toHaveValue("Updated Crew Neck");
   });
@@ -1044,47 +1163,50 @@ describe("App authentication", () => {
     expect(mockedGetProduct).not.toHaveBeenCalled();
   });
 
-  it("requires confirmation before discontinuing and preserves the product record", async () => {
+  it("requires confirmation before deleting a product and removes stale discontinue actions", async () => {
     mockedGetCurrentUser.mockResolvedValue({ ...customer, role: "SALES_OFFICER" });
-    mockedDiscontinueProduct.mockResolvedValue(discontinuedProductResponse);
+    mockedDeleteProduct.mockResolvedValue(deletedProductResponse);
+    mockedGetCatalogProducts.mockResolvedValue([]);
     const user = userEvent.setup();
     renderApp(getEditProductPagePath(catalogProduct.id));
 
     await screen.findByRole("heading", { name: "Edit garment product" });
-    await user.click(screen.getByRole("button", { name: "Discontinue product" }));
+    expect(screen.queryByRole("button", { name: /Discontinue product/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Delete product" }));
 
-    expect(mockedDiscontinueProduct).not.toHaveBeenCalled();
-    expect(screen.getByRole("alertdialog", { name: "Confirm product discontinuation" }))
+    expect(mockedDeleteProduct).not.toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog", { name: "Delete product?" }))
+      .toHaveTextContent("Products already used in orders or quotations cannot be deleted.");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: "Delete product" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(mockedDeleteProduct).toHaveBeenCalledWith(catalogProduct.id);
+    expect(await screen.findByRole("heading", { name: "Product management" }))
       .toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Keep product active" }));
-    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Discontinue product" }));
-    await user.click(screen.getByRole("button", { name: "Confirm discontinuation" }));
-
-    expect(await screen.findByRole("heading", { name: "Product discontinued" }))
-      .toBeInTheDocument();
-    expect(screen.getByText(/historical references/i))
-      .toHaveTextContent(`Product ID ${catalogProduct.id}`);
-    expect(mockedDiscontinueProduct).toHaveBeenCalledWith(catalogProduct.id);
   });
 
-  it("keeps confirmation available when discontinuation fails", async () => {
+  it("shows the backend conflict message when a product is already in use", async () => {
     mockedGetCurrentUser.mockResolvedValue({ ...customer, role: "SALES_OFFICER" });
-    mockedDiscontinueProduct.mockRejectedValue(new Error("Lifecycle service unavailable."));
+    mockedDeleteProduct.mockRejectedValue(Object.assign(
+      new Error("This product cannot be deleted because it is already used by existing orders or quotations."),
+      { code: "PRODUCT_IN_USE", status: 409 },
+    ));
     const user = userEvent.setup();
     renderApp(getEditProductPagePath(catalogProduct.id));
 
     await screen.findByRole("heading", { name: "Edit garment product" });
-    await user.click(screen.getByRole("button", { name: "Discontinue product" }));
-    await user.click(screen.getByRole("button", { name: "Confirm discontinuation" }));
+    await user.click(screen.getByRole("button", { name: "Delete product" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Lifecycle service unavailable.",
+      "This product cannot be deleted because it is already used by existing orders or quotations.",
     );
-    expect(screen.getByRole("alertdialog", { name: "Confirm product discontinuation" }))
+    expect(screen.getByRole("alertdialog", { name: "Delete product?" }))
       .toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Confirm discontinuation" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Delete" })).toBeEnabled();
   });
 
   it("shows the reusable loading state while the public catalog is fetched", () => {
@@ -1108,6 +1230,7 @@ describe("App authentication", () => {
     expect(screen.getByRole("link", { name: "View product details" }))
       .toHaveAttribute("href", getProductDetailPagePath(catalogProduct.id));
     expect(screen.queryByRole("link", { name: /to cart/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Availability")).not.toBeInTheDocument();
 
     const navigation = screen.getByRole("navigation", { name: "Primary navigation" });
     expect(within(navigation).getByRole("link", { name: /garment catalog/i }))
@@ -1130,7 +1253,7 @@ describe("App authentication", () => {
     expect(within(navigation).getByRole("link", { name: /garment catalog/i }))
       .toBeInTheDocument();
     const addToCartLink = screen.getByRole("link", {
-      name: `Add ${catalogProduct.name}, M, Navy Blue to cart`,
+      name: `Add ${catalogProduct.name} to cart`,
     });
     expect(addToCartLink).toHaveAttribute(
       "href",
@@ -1143,6 +1266,94 @@ describe("App authentication", () => {
     expect(screen.getByLabelText("Product")).toHaveValue(String(catalogProduct.id));
     expect(screen.getByLabelText("Size / color"))
       .toHaveValue(String(catalogProduct.variants[0].id));
+  });
+
+  it("shows one cart action per product and lets the customer choose the variant", async () => {
+    const secondVariant = {
+      ...catalogProduct.variants[0],
+      id: catalogProduct.variants[0].id + 1,
+      size: "L",
+      color: "Navy Blue",
+      price: "2699.90",
+    };
+    mockedGetCurrentUser.mockResolvedValue(customer);
+    mockedGetCatalogProducts.mockResolvedValue([{
+      ...catalogProduct,
+      variants: [catalogProduct.variants[0], secondVariant],
+    }]);
+    const user = userEvent.setup();
+    renderApp(productCatalogPagePath);
+
+    expect(await screen.findByRole("heading", { name: "Classic Crew Neck" }))
+      .toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: `Add ${catalogProduct.name} to cart` }))
+      .toHaveLength(1);
+
+    await user.selectOptions(screen.getByLabelText("Choose size and colour"), String(secondVariant.id));
+    expect(screen.getByRole("link", { name: `Add ${catalogProduct.name} to cart` }))
+      .toHaveAttribute(
+        "href",
+        getCustomerPlaceOrderWithItemPath(catalogProduct.id, secondVariant.id),
+      );
+  });
+
+  it("gives Sales Officers a protected management view for inactive products and unavailable variants", async () => {
+    mockedGetCurrentUser.mockResolvedValue({ ...customer, role: "SALES_OFFICER" });
+    mockedGetManagedProducts.mockResolvedValue([{
+      ...catalogProduct,
+      status: "INACTIVE",
+      variants: [{ ...catalogProduct.variants[0], status: "UNAVAILABLE" }],
+    }]);
+    renderApp(productManagementPagePath);
+
+    expect(await screen.findByRole("heading", { name: "Product management" }))
+      .toBeInTheDocument();
+    expect(screen.getByText("INACTIVE")).toBeInTheDocument();
+    expect(screen.getByText(/UNAVAILABLE$/, { selector: "span" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Edit" })).toHaveAttribute(
+      "href",
+      getEditProductPagePath(catalogProduct.id),
+    );
+    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+  });
+
+  it("animates a successful staff product removal only after the backend confirms deletion", async () => {
+    mockedGetCurrentUser.mockResolvedValue({ ...customer, role: "SALES_OFFICER" });
+    mockedGetManagedProducts.mockResolvedValue([catalogProduct]);
+    mockedDeleteProduct.mockResolvedValue(deletedProductResponse);
+    const user = userEvent.setup();
+    renderApp(productManagementPagePath);
+
+    const productHeading = await screen.findByRole("heading", { name: catalogProduct.name });
+    const removingProduct = productHeading.closest("li");
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    const dialog = screen.getByRole("alertdialog", { name: "Delete product?" });
+    await user.click(within(dialog).getByRole("button", { name: "Delete" }));
+
+    expect(mockedDeleteProduct).toHaveBeenCalledWith(catalogProduct.id);
+    await waitFor(() => expect(removingProduct).toHaveAttribute("data-motion-state", "closed"));
+    expect(removingProduct).toHaveAttribute("inert");
+    await waitFor(() => expect(screen.queryByRole("heading", { name: catalogProduct.name })).not.toBeInTheDocument());
+  });
+
+  it("keeps a staff product visible when deletion fails", async () => {
+    mockedGetCurrentUser.mockResolvedValue({ ...customer, role: "SALES_OFFICER" });
+    mockedGetManagedProducts.mockResolvedValue([catalogProduct]);
+    mockedDeleteProduct.mockRejectedValue(Object.assign(
+      new Error("This product cannot be deleted because it is already used by existing orders or quotations."),
+      { code: "PRODUCT_IN_USE", status: 409 },
+    ));
+    const user = userEvent.setup();
+    renderApp(productManagementPagePath);
+
+    expect(await screen.findByRole("heading", { name: catalogProduct.name })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(within(screen.getByRole("alertdialog", { name: "Delete product?" })).getByRole("button", { name: "Delete" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "This product cannot be deleted because it is already used by existing orders or quotations.",
+    );
+    expect(screen.getByRole("heading", { name: catalogProduct.name })).toBeInTheDocument();
   });
 
   it("lets a registered customer add an available option from product details", async () => {
@@ -1194,7 +1405,6 @@ describe("App authentication", () => {
     await user.type(screen.getByLabelText("Category"), "  Formal Wear  ");
     await user.type(screen.getByLabelText("Size"), " M ");
     await user.type(screen.getByLabelText("Color"), " Navy Blue ");
-    await user.selectOptions(screen.getByLabelText("Availability"), "AVAILABLE");
     await user.click(screen.getByRole("button", { name: "Search catalog" }));
 
     await waitFor(() => expect(mockedGetCatalogProducts).toHaveBeenLastCalledWith(
@@ -1203,7 +1413,6 @@ describe("App authentication", () => {
         category: "Formal Wear",
         size: "M",
         color: "Navy Blue",
-        availability: "AVAILABLE",
       },
       expect.any(AbortSignal),
     ));
@@ -1620,6 +1829,7 @@ describe("App authentication", () => {
       unitPrice: "910.75",
       deliveryLeadTimeDays: 5,
       deliveryNotes: "Revised receiving window",
+      status: "INACTIVE",
       updatedAt: "2026-08-23T08:30:00Z",
     };
     const updateResponse: UpdateMaterialSupplyResponse = {
@@ -1640,6 +1850,7 @@ describe("App authentication", () => {
     expect(screen.getByLabelText("Unit price")).toHaveValue(materialSupply.unitPrice);
     expect(screen.getByLabelText("Delivery lead time (days)"))
       .toHaveValue(String(materialSupply.deliveryLeadTimeDays));
+    expect(screen.getByLabelText("Status")).toHaveValue("ACTIVE");
 
     await user.clear(screen.getByLabelText("Quantity"));
     await user.type(screen.getByLabelText("Quantity"), "900.250");
@@ -1652,6 +1863,7 @@ describe("App authentication", () => {
       screen.getByLabelText("Delivery notes (optional)"),
       " Revised   receiving window ",
     );
+    await user.selectOptions(screen.getByLabelText("Status"), "INACTIVE");
     await user.click(screen.getByRole("button", { name: "Update supply details" }));
 
     expect(mockedUpdateMaterialSupply).toHaveBeenCalledWith(materialSupply.id, {
@@ -1659,10 +1871,12 @@ describe("App authentication", () => {
       unitPrice: "910.75",
       deliveryLeadTimeDays: "5",
       deliveryNotes: "Revised receiving window",
+      status: "INACTIVE",
     });
     expect(await screen.findByText(/material supply updated successfully/i))
       .toBeInTheDocument();
     expect(screen.getByLabelText("Quantity")).toHaveValue(updatedSupply.quantity);
+    expect(screen.getByLabelText("Status")).toHaveValue("INACTIVE");
     expect(screen.getByRole("link", { name: "Back to my supplies" }))
       .toHaveAttribute("href", materialSupplyListPagePath);
   });
@@ -1719,75 +1933,54 @@ describe("App authentication", () => {
       .toHaveAttribute("href", materialSupplyListPagePath);
   });
 
-  it("requires confirmation and archives a supply while retaining its stable ID", async () => {
-    const archivedSupply: MaterialSupply = {
-      ...materialSupply,
-      status: "DISCONTINUED",
-      updatedAt: "2026-08-23T09:00:00Z",
-    };
-    const archiveResponse: ArchiveMaterialSupplyResponse = {
-      message: "Material supply archived successfully.",
-      supply: archivedSupply,
+  it("requires confirmation before deleting a material supply and removes stale archive actions", async () => {
+    const deleteResponse: DeleteMaterialSupplyResponse = {
+      message: "Material supply deleted successfully.",
+      supplyId: materialSupply.id,
     };
     mockedGetCurrentUser.mockResolvedValue({ ...customer, role: "SUPPLIER" });
     mockedGetMaterialSupply.mockResolvedValue(materialSupply);
-    mockedArchiveMaterialSupply.mockResolvedValue(archiveResponse);
+    mockedDeleteMaterialSupply.mockResolvedValue(deleteResponse);
+    mockedGetMaterialSupplies.mockResolvedValue([]);
     const user = userEvent.setup();
     renderApp(getEditMaterialSupplyPagePath(materialSupply.id));
 
     await screen.findByRole("heading", { name: "Edit material supply" });
-    await user.click(screen.getByRole("button", { name: "Archive supply" }));
-    expect(screen.getByRole("alertdialog")).toHaveTextContent(
-      "No database record or stable ID will be deleted.",
+    expect(screen.queryByRole("button", { name: /Archive supply/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Delete material supply" }));
+    expect(screen.getByRole("alertdialog", { name: "Delete material supply?" }))
+      .toHaveTextContent("Are you sure you want to delete this material supply?");
+    expect(mockedDeleteMaterialSupply).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Delete material supply" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(mockedDeleteMaterialSupply).toHaveBeenCalledWith(materialSupply.id);
+    expect(await screen.findByRole("heading", { name: "My material supplies" }))
+      .toBeInTheDocument();
+  });
+
+  it("shows the backend conflict message when a material supply is already in use", async () => {
+    mockedGetCurrentUser.mockResolvedValue({ ...customer, role: "SUPPLIER" });
+    mockedGetMaterialSupply.mockResolvedValue(materialSupply);
+    mockedDeleteMaterialSupply.mockRejectedValue(Object.assign(
+      new Error("This material supply cannot be deleted because it is already used by inventory records."),
+      { code: "SUPPLY_IN_USE", status: 409 },
+    ));
+    const user = userEvent.setup();
+    renderApp(getEditMaterialSupplyPagePath(materialSupply.id));
+
+    await screen.findByRole("heading", { name: "Edit material supply" });
+    await user.click(screen.getByRole("button", { name: "Delete material supply" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "This material supply cannot be deleted because it is already used by inventory records.",
     );
-    expect(mockedArchiveMaterialSupply).not.toHaveBeenCalled();
-
-    await user.click(screen.getByRole("button", { name: "Keep supply active" }));
-    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Archive supply" }));
-    await user.click(screen.getByRole("button", { name: "Confirm archive" }));
-
-    expect(mockedArchiveMaterialSupply).toHaveBeenCalledWith(materialSupply.id);
-    expect(await screen.findByRole("heading", { name: "Material supply archived" }))
+    expect(screen.getByRole("alertdialog", { name: "Delete material supply?" }))
       .toBeInTheDocument();
-    expect(screen.getByText("Material supply archived successfully.", { exact: false }))
-      .toBeInTheDocument();
-    expect(screen.getByText(String(materialSupply.id))).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Back to my supplies" }))
-      .toHaveAttribute("href", materialSupplyListPagePath);
-  });
-
-  it("shows retained archived supplies without editable controls", async () => {
-    mockedGetCurrentUser.mockResolvedValue({ ...customer, role: "SUPPLIER" });
-    mockedGetMaterialSupply.mockResolvedValue({
-      ...materialSupply,
-      status: "DISCONTINUED",
-    });
-    renderApp(getEditMaterialSupplyPagePath(materialSupply.id));
-
-    expect(await screen.findByRole("heading", { name: "Material supply archived" }))
-      .toBeInTheDocument();
-    expect(screen.getByText(/stable ID and complete record remain available/i))
-      .toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Update supply details" }))
-      .not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Archive supply" }))
-      .not.toBeInTheDocument();
-  });
-
-  it("keeps archive confirmation open when the server rejects archival", async () => {
-    mockedGetCurrentUser.mockResolvedValue({ ...customer, role: "SUPPLIER" });
-    mockedGetMaterialSupply.mockResolvedValue(materialSupply);
-    mockedArchiveMaterialSupply.mockRejectedValue(new Error("Archive service unavailable."));
-    const user = userEvent.setup();
-    renderApp(getEditMaterialSupplyPagePath(materialSupply.id));
-
-    await screen.findByRole("heading", { name: "Edit material supply" });
-    await user.click(screen.getByRole("button", { name: "Archive supply" }));
-    await user.click(screen.getByRole("button", { name: "Confirm archive" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent("Archive service unavailable.");
-    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
   });
 
   it("lets an Inventory Manager link an authorized supplier supply while creating material", async () => {
@@ -1965,7 +2158,33 @@ describe("App authentication", () => {
     expect(screen.getByText("Sufficient stock")).toBeInTheDocument();
   });
 
-  it("lets an Inventory Manager consume stock and refreshes the displayed quantity", async () => {
+  it("lets an Inventory Manager receive supplier stock and refreshes the displayed quantity", async () => {
+    mockedGetCurrentUser.mockResolvedValue({ ...customer, role: "INVENTORY_MANAGER" });
+    mockedGetInventoryMaterials.mockResolvedValue([linkedInventoryMaterial]);
+    mockedGetMaterialSupplies.mockResolvedValue([listedMaterialSupply]);
+    mockedReceiveInventoryMaterial.mockResolvedValue(receivedInventoryMaterialResponse);
+    const user = userEvent.setup();
+    renderApp(inventoryMaterialListPagePath);
+
+    await screen.findByRole("heading", { name: linkedInventoryMaterial.materialName });
+    await user.type(
+      screen.getByLabelText(`Receive quantity for ${linkedInventoryMaterial.materialName}`),
+      "130.000",
+    );
+    await user.click(screen.getByRole("button", {
+      name: `Receive stock for ${linkedInventoryMaterial.materialName}`,
+    }));
+
+    expect(mockedReceiveInventoryMaterial).toHaveBeenCalledWith(
+      linkedInventoryMaterial.id,
+      "130.000",
+    );
+    expect(await screen.findByText("970.250 metre")).toBeInTheDocument();
+    expect(screen.getByText("Supplier material received into inventory successfully."))
+      .toBeInTheDocument();
+  });
+
+  it("lets an Inventory Manager release stock to production and refreshes the displayed quantity", async () => {
     mockedGetCurrentUser.mockResolvedValue({ ...customer, role: "INVENTORY_MANAGER" });
     mockedGetInventoryMaterials.mockResolvedValue([linkedInventoryMaterial]);
     mockedGetMaterialSupplies.mockResolvedValue([listedMaterialSupply]);
@@ -1975,11 +2194,11 @@ describe("App authentication", () => {
 
     await screen.findByRole("heading", { name: linkedInventoryMaterial.materialName });
     await user.type(
-      screen.getByLabelText(`Use quantity for ${linkedInventoryMaterial.materialName}`),
+      screen.getByLabelText(`Release quantity for ${linkedInventoryMaterial.materialName}`),
       "40.000",
     );
     await user.click(screen.getByRole("button", {
-      name: `Use stock for ${linkedInventoryMaterial.materialName}`,
+      name: `Release stock to production for ${linkedInventoryMaterial.materialName}`,
     }));
 
     expect(mockedConsumeInventoryMaterial).toHaveBeenCalledWith(
@@ -2015,8 +2234,13 @@ describe("App authentication", () => {
     renderApp(inventoryMaterialListPagePath);
 
     await screen.findByRole("heading", { name: nearThreshold.materialName });
-    await user.type(screen.getByLabelText(`Use quantity for ${nearThreshold.materialName}`), "5.000");
-    await user.click(screen.getByRole("button", { name: `Use stock for ${nearThreshold.materialName}` }));
+    await user.type(
+      screen.getByLabelText(`Release quantity for ${nearThreshold.materialName}`),
+      "5.000",
+    );
+    await user.click(screen.getByRole("button", {
+      name: `Release stock to production for ${nearThreshold.materialName}`,
+    }));
 
     expect(await screen.findByText("1 low-stock material")).toBeInTheDocument();
     expect(screen.getByText("100.000 / 100.000 metre")).toBeInTheDocument();
@@ -2041,11 +2265,11 @@ describe("App authentication", () => {
 
     await screen.findByRole("heading", { name: linkedInventoryMaterial.materialName });
     await user.type(
-      screen.getByLabelText(`Use quantity for ${linkedInventoryMaterial.materialName}`),
+      screen.getByLabelText(`Release quantity for ${linkedInventoryMaterial.materialName}`),
       "900.000",
     );
     await user.click(screen.getByRole("button", {
-      name: `Use stock for ${linkedInventoryMaterial.materialName}`,
+      name: `Release stock to production for ${linkedInventoryMaterial.materialName}`,
     }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Insufficient stock");
@@ -2061,11 +2285,11 @@ describe("App authentication", () => {
 
     await screen.findByRole("heading", { name: linkedInventoryMaterial.materialName });
     await user.type(
-      screen.getByLabelText(`Use quantity for ${linkedInventoryMaterial.materialName}`),
+      screen.getByLabelText(`Release quantity for ${linkedInventoryMaterial.materialName}`),
       "0",
     );
     await user.click(screen.getByRole("button", {
-      name: `Use stock for ${linkedInventoryMaterial.materialName}`,
+      name: `Release stock to production for ${linkedInventoryMaterial.materialName}`,
     }));
 
     expect(screen.getByText(/Usage quantity must be greater than zero/i)).toBeInTheDocument();
@@ -2108,30 +2332,55 @@ describe("App authentication", () => {
     expect(screen.getByText("840.250 metre")).toBeInTheDocument();
   });
 
-  it("archives an inventory row in place and disables lifecycle actions", async () => {
+  it("deletes an unused inventory material after confirmation and removes it from the list", async () => {
     mockedGetCurrentUser.mockResolvedValue({ ...customer, role: "INVENTORY_MANAGER" });
     mockedGetInventoryMaterials.mockResolvedValue([linkedInventoryMaterial]);
     mockedGetMaterialSupplies.mockResolvedValue([listedMaterialSupply]);
-    mockedArchiveInventoryMaterial.mockResolvedValue(archivedInventoryMaterialResponse);
+    mockedDeleteInventoryMaterial.mockResolvedValue(deletedInventoryMaterialResponse);
     const user = userEvent.setup();
     renderApp(inventoryMaterialListPagePath);
 
     await screen.findByRole("heading", { name: linkedInventoryMaterial.materialName });
-    await user.click(screen.getByRole("button", { name: "Archive material" }));
-    const archiveDialog = screen.getByRole("alertdialog", {
-      name: "Archive inventory material?",
+    expect(screen.queryByRole("button", { name: /archive|discontinue/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Delete material" }));
+    const deleteDialog = screen.getByRole("alertdialog", {
+      name: "Delete material?",
     });
-    await user.click(within(archiveDialog).getByRole("button", {
-      name: "Archive material",
+    expect(deleteDialog).toHaveTextContent(`Are you sure you want to delete "${linkedInventoryMaterial.materialName}"?`);
+    await user.click(within(deleteDialog).getByRole("button", {
+      name: "Delete",
     }));
 
-    expect(mockedArchiveInventoryMaterial).toHaveBeenCalledWith(linkedInventoryMaterial.id);
-    expect(await screen.findByText("DISCONTINUED")).toBeInTheDocument();
-    expect(screen.getByText("Archived · history preserved")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: `Use stock for ${linkedInventoryMaterial.materialName}` }))
-      .toBeDisabled();
-    expect(screen.getByRole("link", { name: "View archived record" }))
-      .toHaveAttribute("href", getEditInventoryMaterialPagePath(linkedInventoryMaterial.id));
+    expect(mockedDeleteInventoryMaterial).toHaveBeenCalledWith(linkedInventoryMaterial.id);
+    expect(await screen.findByText("Inventory material deleted successfully."))
+      .toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole("heading", { name: linkedInventoryMaterial.materialName }))
+        .not.toBeInTheDocument();
+    });
+  });
+
+  it("shows a useful conflict when an inventory material is already in use", async () => {
+    mockedGetCurrentUser.mockResolvedValue({ ...customer, role: "INVENTORY_MANAGER" });
+    mockedGetInventoryMaterials.mockResolvedValue([linkedInventoryMaterial]);
+    mockedGetMaterialSupplies.mockResolvedValue([listedMaterialSupply]);
+    mockedDeleteInventoryMaterial.mockRejectedValue(Object.assign(
+      new Error("This material cannot be deleted because it is already used in existing records."),
+      { code: "MATERIAL_IN_USE", status: 409 },
+    ));
+    const user = userEvent.setup();
+    renderApp(inventoryMaterialListPagePath);
+
+    await screen.findByRole("heading", { name: linkedInventoryMaterial.materialName });
+    await user.click(screen.getByRole("button", { name: "Delete material" }));
+    await user.click(within(screen.getByRole("alertdialog", { name: "Delete material?" }))
+      .getByRole("button", { name: "Delete" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "This material cannot be deleted because it is already used in existing records.",
+    );
+    expect(screen.getByRole("heading", { name: linkedInventoryMaterial.materialName }))
+      .toBeInTheDocument();
   });
 
   it("shows a retry state when the authorized supplier selector cannot load", async () => {
@@ -2183,6 +2432,23 @@ describe("App authentication", () => {
     })).toHaveAttribute("href", newInventoryMaterialPagePath);
   });
 
+  it("keeps the public mobile menu mounted through its exit transition", async () => {
+    mockedGetCurrentUser.mockResolvedValue(null);
+    const user = userEvent.setup();
+    renderApp();
+
+    const toggle = await screen.findByRole("button", { name: "Toggle navigation" });
+    await user.click(toggle);
+    expect(document.getElementById("public-mobile-navigation")).toBeInTheDocument();
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    const closingMenu = document.getElementById("public-mobile-navigation");
+    expect(closingMenu).toBeInTheDocument();
+    expect(closingMenu).toHaveAttribute("inert");
+    await waitFor(() => expect(document.getElementById("public-mobile-navigation")).not.toBeInTheDocument());
+  });
+
   it("shows the reusable not-found page for an unknown route", async () => {
     renderApp("/not-a-real-page");
 
@@ -2220,5 +2486,15 @@ describe("App authentication", () => {
     await user.click(toggle);
 
     expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(document.getElementById("primary-navigation")).toBeInTheDocument();
+    await waitFor(() => expect(document.body.style.overflow).toBe("hidden"));
+
+    await user.click(screen.getByRole("button", { name: "Close navigation" }));
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    const closingDrawer = document.getElementById("primary-navigation")?.parentElement;
+    expect(closingDrawer).toHaveAttribute("inert");
+    expect(document.body.style.overflow).toBe("hidden");
+    await waitFor(() => expect(document.getElementById("primary-navigation")).not.toBeInTheDocument());
+    await waitFor(() => expect(document.body.style.overflow).toBe(""));
   });
 });

@@ -96,10 +96,13 @@ class OrderApiIntegrationTests {
                 .andExpect(jsonPath("$.items[0].selectedSize").value("M"))
                 .andExpect(jsonPath("$.items[0].selectedColor").value("White"))
                 .andExpect(jsonPath("$.items[0].unitPriceSnapshot").value("2490.00"))
+                .andExpect(jsonPath("$.items[0].lineTotal").value("4980.00"))
                 .andExpect(jsonPath("$.items[0].quantity").value(2))
                 .andExpect(jsonPath("$.items[1].selectedSize").value("L"))
                 .andExpect(jsonPath("$.items[1].selectedColor").value("Navy"))
-                .andExpect(jsonPath("$.items[1].unitPriceSnapshot").value("2690.00"));
+                .andExpect(jsonPath("$.items[1].unitPriceSnapshot").value("2690.00"))
+                .andExpect(jsonPath("$.items[1].lineTotal").value("2690.00"))
+                .andExpect(jsonPath("$.totalAmount").value("7670.00"));
 
         long orderId = jdbcTemplate.queryForObject(
                 "SELECT id FROM orders WHERE customer_id = ?", Long.class, 4101);
@@ -136,6 +139,20 @@ class OrderApiIntegrationTests {
                         orderId,
                         4301))
                 .isEqualTo("White");
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT product_name_snapshot FROM order_items WHERE order_id = ? AND variant_id = ?",
+                        String.class,
+                        orderId,
+                        4301))
+                .isEqualTo("Classic Oxford Shirt");
+
+        jdbcTemplate.update(
+                "UPDATE garment_products SET name = 'Renamed catalog product', image_url = '/products/renamed.jpg' WHERE id = 4201");
+        mockMvc.perform(get("/api/orders/{orderId}", orderId)
+                        .cookie(sessionFor(UserRole.SALES_OFFICER)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].productName").value("Classic Oxford Shirt"))
+                .andExpect(jsonPath("$.items[0].productImageUrl").value("/products/oxford-shirt.jpg"));
     }
 
     @Test
@@ -277,7 +294,9 @@ class OrderApiIntegrationTests {
                 .andExpect(jsonPath("$.items[0].quantity").value(3))
                 .andExpect(jsonPath("$.items[0].selectedSize").value("M"))
                 .andExpect(jsonPath("$.items[0].selectedColor").value("White"))
-                .andExpect(jsonPath("$.items[0].unitPriceSnapshot").value("2490.00"));
+                .andExpect(jsonPath("$.items[0].unitPriceSnapshot").value("2490.00"))
+                .andExpect(jsonPath("$.items[0].lineTotal").value("7470.00"))
+                .andExpect(jsonPath("$.totalAmount").value("7470.00"));
 
         assertThat(jdbcTemplate.queryForObject(
                         "SELECT COUNT(*) FROM orders WHERE customer_id = ?", Integer.class, 4101))
@@ -414,9 +433,8 @@ class OrderApiIntegrationTests {
                                   ]
                                 }
                                 """))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.error.code").value("CUSTOMER_NOT_SELECTABLE"))
-                .andExpect(jsonPath("$.error.fields.customerId").exists());
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("INVALID_SESSION"));
 
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM orders", Integer.class))
                 .isZero();
@@ -480,6 +498,25 @@ class OrderApiIntegrationTests {
     }
 
     @Test
+    void orderPreviewNameAndImageComeFromTheSameFirstOrderItem() throws Exception {
+        insertUser(4101, "preview@example.com", "Preview Customer", UserRole.CUSTOMER, true);
+        insertCategoryProductAndVariants();
+        insertOrder(4501, 4101, "ORD-PREVIEW-PAIR", "PENDING");
+        insertOrderItemSnapshot(
+                4601, 4501, 4301, "Zulu First Product", "/products/a-first.jpg",
+                1, "M", "White", "2490.00");
+        insertOrderItemSnapshot(
+                4602, 4501, 4302, "Alpha Second Product", "/products/z-second.jpg",
+                1, "L", "Navy", "2690.00");
+
+        mockMvc.perform(get("/api/orders")
+                        .cookie(sessionFor(UserRole.SALES_OFFICER)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].previewProductName").value("Zulu First Product"))
+                .andExpect(jsonPath("$[0].previewProductImageUrl").value("/products/a-first.jpg"));
+    }
+
+    @Test
     void customerHistoryAndDetailAreStrictlyScopedToAuthenticatedCustomer() throws Exception {
         insertUser(4101, "own@example.com", "Own Customer", UserRole.CUSTOMER, true);
         insertUser(4102, "other@example.com", "Other Customer", UserRole.CUSTOMER, true);
@@ -538,8 +575,8 @@ class OrderApiIntegrationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Order status updated successfully."))
                 .andExpect(jsonPath("$.order.status").value("CONFIRMED"))
-                .andExpect(jsonPath("$.order.allowedStatusTransitions[0]").value("IN_PRODUCTION"))
-                .andExpect(jsonPath("$.order.allowedStatusTransitions[1]").value("CANCELLED"))
+                .andExpect(jsonPath("$.order.allowedStatusTransitions.length()").value(1))
+                .andExpect(jsonPath("$.order.allowedStatusTransitions[0]").value("CANCELLED"))
                 .andExpect(jsonPath("$.order.statusHistory.length()").value(1))
                 .andExpect(jsonPath("$.order.statusHistory[0].fromStatus").value("PENDING"))
                 .andExpect(jsonPath("$.order.statusHistory[0].toStatus").value("CONFIRMED"));
@@ -568,6 +605,7 @@ class OrderApiIntegrationTests {
                         .cookie(sessionForUser(4101, UserRole.CUSTOMER)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CONFIRMED"))
+                .andExpect(jsonPath("$.allowedStatusTransitions.length()").value(0))
                 .andExpect(jsonPath("$.statusHistory[0].toStatus").value("CONFIRMED"));
 
         mockMvc.perform(get("/api/orders/mine/4501/tracking")
@@ -596,11 +634,11 @@ class OrderApiIntegrationTests {
         mockMvc.perform(patch("/api/orders/4501/status")
                         .cookie(sessionForUser(4999, UserRole.SALES_OFFICER))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"COMPLETED\"}"))
+                        .content("{\"status\":\"IN_PRODUCTION\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.code").value("ORDER_STATUS_TRANSITION_NOT_ALLOWED"))
                 .andExpect(jsonPath("$.error.fields.status").value(
-                        "Allowed next status: IN_PRODUCTION or CANCELLED."));
+                        "Production starts through Production Management. The only manual Order action currently available is CANCELLED."));
 
         assertThat(jdbcTemplate.queryForObject(
                         "SELECT status FROM orders WHERE id = ?", String.class, 4501))
@@ -656,9 +694,113 @@ class OrderApiIntegrationTests {
     }
 
     @Test
+    void salesOfficerBillingWorkflowValidatesAmountsMethodsAndForwardOnlyPayments()
+            throws Exception {
+        insertUser(4101, "billing-customer@example.com", "Billing Customer", UserRole.CUSTOMER, true);
+        insertUser(4998, "billing-production@example.com", "Billing Production", UserRole.PRODUCTION_MANAGER, true);
+        insertUser(4999, "billing-sales@example.com", "Billing Sales", UserRole.SALES_OFFICER, true);
+        insertCategoryProductAndVariants();
+        insertOrder(4501, 4101, "ORD-BILLING-FLOW", "PENDING");
+        insertOrderItem(4601, 4501, 4301, 2, "M", "White", "2490.00");
+        Cookie salesSession = sessionForUser(4999, UserRole.SALES_OFFICER);
+
+        mockMvc.perform(post("/api/orders/4501/invoice").cookie(salesSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.billing.invoiceGenerated").value(true))
+                .andExpect(jsonPath("$.billing.invoice.totalAmount").value("4980.00"))
+                .andExpect(jsonPath("$.billing.payment.paymentStatus").value("UNPAID"))
+                .andExpect(jsonPath("$.billing.payment.amountPaid").value("0.00"));
+
+        // Generating again is idempotent and cannot duplicate billing rows.
+        mockMvc.perform(post("/api/orders/4501/invoice").cookie(salesSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.billing.invoice.totalAmount").value("4980.00"));
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM order_invoices WHERE order_id = ?",
+                        Integer.class,
+                        4501))
+                .isEqualTo(1);
+
+        mockMvc.perform(patch("/api/orders/4501/payment")
+                        .cookie(salesSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "paymentStatus": "PAID",
+                                  "amountPaid": "0.00",
+                                  "paymentMethod": ""
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.fields.amountPaid").value(
+                        "Paid amount must exactly match the invoice total."))
+                .andExpect(jsonPath("$.error.fields.paymentMethod").value(
+                        "Select how the payment was recorded."));
+
+        mockMvc.perform(patch("/api/orders/4501/payment")
+                        .cookie(salesSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "paymentStatus": "PARTIALLY_PAID",
+                                  "amountPaid": "2000.00",
+                                  "paymentMethod": "BANK_TRANSFER",
+                                  "paymentReference": "CEFT-TEST-001"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.billing.payment.paymentStatus").value("PARTIALLY_PAID"))
+                .andExpect(jsonPath("$.billing.payment.amountPaid").value("2000.00"))
+                .andExpect(jsonPath("$.billing.payment.paymentMethod").value("BANK_TRANSFER"));
+
+        mockMvc.perform(patch("/api/orders/4501/payment")
+                        .cookie(salesSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "paymentStatus": "PARTIALLY_PAID",
+                                  "amountPaid": "1000.00",
+                                  "paymentMethod": "BANK_TRANSFER"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.fields.amountPaid").value(
+                        "Amount paid cannot be reduced because refund/reversal handling is not enabled."));
+
+        mockMvc.perform(patch("/api/orders/4501/payment")
+                        .cookie(salesSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "paymentStatus": "PAID",
+                                  "amountPaid": "4980.00",
+                                  "paymentMethod": "CASH",
+                                  "note": "Paid at the sales counter."
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.billing.payment.paymentStatus").value("PAID"))
+                .andExpect(jsonPath("$.billing.payment.amountPaid").value("4980.00"))
+                .andExpect(jsonPath("$.billing.payment.paymentMethod").value("CASH"));
+
+        mockMvc.perform(get("/api/orders/mine/4501/billing")
+                        .cookie(sessionForUser(4101, UserRole.CUSTOMER)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.invoice.totalAmount").value("4980.00"))
+                .andExpect(jsonPath("$.payment.paymentStatus").value("PAID"));
+
+        mockMvc.perform(patch("/api/orders/4501/payment")
+                        .cookie(sessionForUser(4998, UserRole.PRODUCTION_MANAGER))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"paymentStatus\":\"PAID\",\"amountPaid\":\"4980.00\",\"paymentMethod\":\"CASH\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void customerTrackingIsOwnershipScopedAndReturnsSafeOrderProgress() throws Exception {
         insertUser(4101, "tracking-owner@example.com", "Tracking Owner", UserRole.CUSTOMER, true);
         insertUser(4102, "tracking-other@example.com", "Tracking Other", UserRole.CUSTOMER, true);
+        insertUser(4998, "tracking-production@example.com", "Tracking Production", UserRole.PRODUCTION_MANAGER, true);
         insertUser(4999, "tracking-sales@example.com", "Tracking Sales", UserRole.SALES_OFFICER, true);
         insertCategoryProductAndVariants();
         insertOrder(4501, 4101, "ORD-TRACK-OWN", "IN_PRODUCTION");
@@ -678,7 +820,7 @@ class OrderApiIntegrationTests {
                     (id, order_id, from_status, to_status, changed_by_user_id)
                 VALUES (?, ?, ?, ?, ?)
                 """,
-                4702, 4501, "CONFIRMED", "IN_PRODUCTION", 4999);
+                4702, 4501, "CONFIRMED", "IN_PRODUCTION", 4998);
 
         Cookie ownerSession = sessionForUser(4101, UserRole.CUSTOMER);
         mockMvc.perform(get("/api/orders/mine/4501/tracking").cookie(ownerSession))
@@ -742,17 +884,42 @@ class OrderApiIntegrationTests {
             String size,
             String color,
             String price) {
+        insertOrderItemSnapshot(
+                id,
+                orderId,
+                variantId,
+                "Classic Oxford Shirt",
+                "/products/oxford-shirt.jpg",
+                quantity,
+                size,
+                color,
+                price);
+    }
+
+    private void insertOrderItemSnapshot(
+            long id,
+            long orderId,
+            long variantId,
+            String productName,
+            String productImageUrl,
+            int quantity,
+            String size,
+            String color,
+            String price) {
         jdbcTemplate.update(
                 """
                 INSERT INTO order_items (
-                    id, order_id, product_id, variant_id, quantity,
+                    id, order_id, product_id, variant_id, product_name_snapshot,
+                    product_image_url_snapshot, quantity,
                     selected_size, selected_color, unit_price_snapshot
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 id,
                 orderId,
                 4201,
                 variantId,
+                productName,
+                productImageUrl,
                 quantity,
                 size,
                 color,
@@ -766,10 +933,11 @@ class OrderApiIntegrationTests {
                 "Formal Wear",
                 "ACTIVE");
         jdbcTemplate.update(
-                "INSERT INTO garment_products (id, category_id, name, status) VALUES (?, ?, ?, ?)",
+                "INSERT INTO garment_products (id, category_id, name, image_url, status) VALUES (?, ?, ?, ?, ?)",
                 4201,
                 4401,
                 "Classic Oxford Shirt",
+                "/products/oxford-shirt.jpg",
                 "ACTIVE");
         insertVariant(4301, "M", "White", "2490.00", "AVAILABLE");
         insertVariant(4302, "L", "Navy", "2690.00", "AVAILABLE");

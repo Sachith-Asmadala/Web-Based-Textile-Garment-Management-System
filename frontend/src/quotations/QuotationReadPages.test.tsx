@@ -1,4 +1,5 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { StrictMode } from "react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -27,6 +28,32 @@ describe("quotation read pages", () => {
     render(<MemoryRouter><QuotationListPage /></MemoryRouter>);
     expect(await screen.findByText("QUO-ABC")).toBeInTheDocument();
     expect(screen.getByText("LKR 4980.00")).toBeInTheDocument();
+  });
+
+  it("ignores a canceled Strict Mode request after the replacement request succeeds", async () => {
+    let rejectCanceledRequest!: (reason?: unknown) => void;
+    const canceledRequest = new Promise<never>((_resolve, reject) => {
+      rejectCanceledRequest = reject;
+    });
+    mockedGetQuotations
+      .mockReturnValueOnce(canceledRequest)
+      .mockResolvedValueOnce([summary]);
+
+    render(
+      <StrictMode>
+        <MemoryRouter><QuotationListPage /></MemoryRouter>
+      </StrictMode>,
+    );
+
+    expect(await screen.findByText("QUO-ABC")).toBeInTheDocument();
+    await act(async () => {
+      rejectCanceledRequest(new DOMException("The request was aborted.", "AbortError"));
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText("Quotations unavailable")).not.toBeInTheDocument();
+      expect(screen.getByText("QUO-ABC")).toBeInTheDocument();
+    });
   });
 
   it("shows immutable quoted item snapshots in detail", async () => {

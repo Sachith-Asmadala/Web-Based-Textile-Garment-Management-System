@@ -515,6 +515,37 @@ describe("ProductionTaskDetailPage", () => {
     expect(await screen.findByText("Production status updated successfully.")).toBeInTheDocument();
     expect(screen.getByText(/Production status:/)).toHaveTextContent("COMPLETED");
     expect(screen.getByText(/Order progress:/)).toHaveTextContent("READY FOR DELIVERY");
+    expect(screen.getByText(
+      "Production completed. The order is ready for delivery scheduling by a Sales Officer.",
+    )).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Ready for delivery" })).not.toBeInTheDocument();
+    expect(screen.getByText("Completed production records are read-only.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save production details" }))
+      .not.toBeInTheDocument();
+  });
+
+  it("shows pending sibling tasks when production completes but the order is still in production", async () => {
+    mockedGetDetail.mockResolvedValue({
+      ...detail,
+      task: {
+        ...detail.task,
+        status: "COMPLETED",
+        startedAt: "2026-08-23T16:00:00Z",
+        completedAt: "2026-08-23T18:00:00Z",
+      },
+      order: {
+        ...detail.order,
+        currentStatus: "IN_PRODUCTION",
+        readyForProduction: false,
+      },
+    });
+    renderPage();
+
+    expect(await screen.findByText(/other production tasks for this order are still pending/))
+      .toBeInTheDocument();
+    expect(screen.queryByText(
+      "Production completed. The order is ready for delivery scheduling by a Sales Officer.",
+    )).not.toBeInTheDocument();
   });
 
   it("shows exact shortage details and disables start when required stock is insufficient", async () => {

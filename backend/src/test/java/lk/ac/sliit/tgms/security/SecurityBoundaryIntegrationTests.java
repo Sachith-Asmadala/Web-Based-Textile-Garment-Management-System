@@ -78,12 +78,12 @@ class SecurityBoundaryIntegrationTests {
                                         {"quantity":1.000,"unitPrice":100.00,"deliveryLeadTimeDays":1,"deliveryNotes":"TGMS-80"}
                                         """)),
                 new SecuredAction(
-                        "inventory archive",
+                        "inventory delete",
                         UserRole.INVENTORY_MANAGER,
                         UserRole.SALES_OFFICER,
                         () -> delete("/api/inventory-materials/999999")),
                 new SecuredAction(
-                        "garment product discontinue",
+                        "garment product delete",
                         UserRole.SALES_OFFICER,
                         UserRole.ADMINISTRATOR,
                         () -> delete("/api/products/999999")),

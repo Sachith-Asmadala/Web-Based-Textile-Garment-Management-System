@@ -7,6 +7,7 @@ import {
   LoginPage,
   RegistrationPage,
   ResetPasswordPage,
+  EmailVerificationPage,
 } from "./auth/AuthPages";
 import { AuthProvider } from "./auth/AuthProvider";
 import {
@@ -33,6 +34,7 @@ import {
   deliveryOrderSelectionPagePath,
   deliveryRecordsPagePath,
   deliveryScheduleRoutePath,
+  emailVerificationPagePath,
   editMaterialSupplyRoutePath,
   editInventoryMaterialRoutePath,
   inventoryMaterialListPagePath,
@@ -46,6 +48,7 @@ import {
   newProductPagePath,
   newMaterialSupplyPagePath,
   productCatalogPagePath,
+  productManagementPagePath,
   productDetailRoutePath,
   productionTaskCreatePagePath,
   productionTaskRecordsPagePath,
@@ -63,6 +66,7 @@ import { NotificationsPage } from "./notifications/NotificationsPage";
 import { SharedSearchPage } from "./search/SharedSearchPage";
 import { AddProductPage } from "./products/AddProductPage";
 import { ProductCatalogPage } from "./products/ProductCatalogPage";
+import { ProductManagementPage } from "./products/ProductManagementPage";
 import { ProductDetailPage } from "./products/ProductDetailPage";
 import { EditProductPage } from "./products/EditProductPage";
 import { SupplierProfilePage } from "./suppliers/SupplierProfilePage";
@@ -118,6 +122,7 @@ export function App() {
         <Route path="/register" element={<RegistrationPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path={emailVerificationPagePath} element={<EmailVerificationPage />} />
         <Route path="/unauthorized" element={<Navigate replace to="/" />} />
         <Route path="/forbidden" element={<ForbiddenPage />} />
         <Route element={<AppLayout />}>
@@ -318,6 +323,14 @@ export function App() {
               </ProtectedRoute>
             }
             path={customerOrderTrackingRoutePath}
+          />
+          <Route
+            element={
+              <ProtectedRoute allowedRoles={["SALES_OFFICER"]}>
+                <ProductManagementPage />
+              </ProtectedRoute>
+            }
+            path={productManagementPagePath}
           />
           <Route
             element={

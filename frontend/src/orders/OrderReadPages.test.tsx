@@ -95,7 +95,7 @@ const detail: OrderDetail = {
     },
   ],
   totalAmount: "7670.00",
-  allowedStatusTransitions: ["IN_PRODUCTION", "CANCELLED"],
+  allowedStatusTransitions: ["CANCELLED"],
   statusHistory: [
     {
       id: 201,
@@ -171,15 +171,14 @@ describe("TGMS-45 order read pages", () => {
       message: "Order status updated successfully.",
       order: {
         ...detail,
-        status: "IN_PRODUCTION",
+        status: "CONFIRMED",
         updatedAt: "2026-08-23T10:10:00Z",
-        allowedStatusTransitions: ["READY_FOR_DELIVERY"],
+        allowedStatusTransitions: ["CANCELLED"],
         statusHistory: [
-          ...detail.statusHistory,
           {
             id: 202,
-            fromStatus: "CONFIRMED",
-            toStatus: "IN_PRODUCTION",
+            fromStatus: "PENDING",
+            toStatus: "CONFIRMED",
             changedAt: "2026-08-23T10:10:00Z",
           },
         ],
@@ -217,6 +216,18 @@ describe("TGMS-45 order read pages", () => {
     ));
   });
 
+  it("shows completed production as Ready For Delivery on the staff orders page", async () => {
+    mockedGetOrders.mockResolvedValue([{
+      ...summary,
+      status: "READY_FOR_DELIVERY",
+      updatedAt: "2026-08-23T14:00:00Z",
+    }]);
+    renderRoute("/orders", "/orders", <StaffOrderListPage />);
+
+    expect(await screen.findByRole("heading", { name: "Customer orders" })).toBeInTheDocument();
+    expect(screen.getAllByText("Ready For Delivery").length).toBeGreaterThanOrEqual(2);
+  });
+
   it("renders staff order detail from stored item snapshots and totals", async () => {
     renderRoute("/orders/91", "/orders/:orderId", <StaffOrderDetailPage />);
 
@@ -227,22 +238,30 @@ describe("TGMS-45 order read pages", () => {
     expect(mockedGetOrderDetail).toHaveBeenCalledWith(91, expect.any(AbortSignal));
   });
 
-  it("lets staff apply only server-provided next statuses and refreshes the tracking timeline", async () => {
+  it("lets staff confirm a pending order without bypassing Production Management", async () => {
     const user = userEvent.setup();
+    mockedGetOrderDetail.mockResolvedValue({
+      ...detail,
+      status: "PENDING",
+      allowedStatusTransitions: ["CONFIRMED", "CANCELLED"],
+      statusHistory: [],
+    });
     renderRoute("/orders/91", "/orders/:orderId", <StaffOrderDetailPage />);
 
     expect(await screen.findByRole("heading", { name: "Update order status" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "In Production" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Confirmed" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Cancelled" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "In Production" })).not.toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "Completed" })).not.toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText("Next status"), "IN_PRODUCTION");
+    await user.selectOptions(screen.getByLabelText("Next status"), "CONFIRMED");
     await user.click(screen.getByRole("button", { name: "Update status" }));
 
-    await waitFor(() => expect(mockedUpdateOrderStatus).toHaveBeenCalledWith(91, "IN_PRODUCTION"));
+    await waitFor(() => expect(mockedUpdateOrderStatus).toHaveBeenCalledWith(91, "CONFIRMED"));
     expect(await screen.findByText("Order status updated successfully.")).toBeInTheDocument();
-    expect(screen.getByText("Confirmed → In Production")).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Ready For Delivery" })).toBeInTheDocument();
+    expect(screen.getByText("Pending → Confirmed")).toBeInTheDocument();
+    expect(screen.getByText(/production progress is owned by Production Management/i)).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "In Production" })).not.toBeInTheDocument();
   });
 
   it("lets staff generate an invoice and record manual payment details", async () => {
@@ -255,9 +274,14 @@ describe("TGMS-45 order read pages", () => {
     expect(screen.getByText("Invoice generated successfully.")).toBeInTheDocument();
 
     await user.selectOptions(screen.getByLabelText("Payment status"), "PAID");
-    await user.clear(screen.getByLabelText("Amount paid"));
-    await user.type(screen.getByLabelText("Amount paid"), "7670.00");
-    await user.selectOptions(screen.getByLabelText("Payment method"), "CASH");
+    expect(screen.getByLabelText("Amount paid")).toHaveValue("7670.00");
+    expect(screen.getByLabelText("Amount paid")).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Save payment record" }));
+    expect(mockedUpdateOrderPayment).not.toHaveBeenCalled();
+    expect(screen.getByText("Select how the payment was recorded.")).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Payment method (required)"), "CASH");
     await user.click(screen.getByRole("button", { name: "Save payment record" }));
 
     await waitFor(() => expect(mockedUpdateOrderPayment).toHaveBeenCalledWith(91, expect.objectContaining({
@@ -266,6 +290,32 @@ describe("TGMS-45 order read pages", () => {
       paymentMethod: "CASH",
     })));
     expect(await screen.findByText("Payment record updated successfully.")).toBeInTheDocument();
+    expect(screen.getByText(/payment is fully recorded/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save payment record" })).not.toBeInTheDocument();
+  });
+
+  it("validates partial payment amount and method before calling the API", async () => {
+    const user = userEvent.setup();
+    mockedGetOrderBilling.mockResolvedValue(issuedBilling);
+    renderRoute("/orders/91", "/orders/:orderId", <StaffOrderDetailPage />);
+
+    await screen.findByRole("heading", { name: "Invoice & payment record" });
+    await user.selectOptions(screen.getByLabelText("Payment status"), "PARTIALLY_PAID");
+    expect(screen.getByLabelText("Amount paid")).toHaveValue("");
+
+    await user.click(screen.getByRole("button", { name: "Save payment record" }));
+    expect(mockedUpdateOrderPayment).not.toHaveBeenCalled();
+    expect(screen.getByText("Enter a non-negative amount with up to 2 decimal places.")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Amount paid"), "2500.00");
+    await user.selectOptions(screen.getByLabelText("Payment method (required)"), "BANK_TRANSFER");
+    await user.click(screen.getByRole("button", { name: "Save payment record" }));
+
+    await waitFor(() => expect(mockedUpdateOrderPayment).toHaveBeenCalledWith(91, expect.objectContaining({
+      paymentStatus: "PARTIALLY_PAID",
+      amountPaid: "2500.00",
+      paymentMethod: "BANK_TRANSFER",
+    })));
   });
 
   it("uses ownership-scoped history and detail APIs for customers", async () => {

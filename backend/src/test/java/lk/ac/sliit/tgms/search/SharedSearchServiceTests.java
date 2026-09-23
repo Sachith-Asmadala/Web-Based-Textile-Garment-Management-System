@@ -50,6 +50,7 @@ class SharedSearchServiceTests {
         when(orderService.getCustomerOrders(51L, "ORD")).thenReturn(List.of(new OrderSummary(
                 91L, "ORD-91", 51L, "Customer", "customer@example.com", OrderStatus.CONFIRMED,
                 Instant.parse("2026-08-26T10:00:00Z"), Instant.parse("2026-08-26T10:00:00Z"), 2,
+                "Classic Oxford Shirt", "/products/classic-oxford-shirt.jpg",
                 new java.math.BigDecimal("1500.00"))));
 
         SharedSearchPage page = service.search(51L, "  ORD  ", 0, 10);

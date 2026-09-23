@@ -2,6 +2,7 @@ package lk.ac.sliit.tgms.auth;
 
 import java.util.List;
 import java.util.Optional;
+import java.time.Instant;
 
 public interface UserAccountRepository {
 
@@ -18,4 +19,8 @@ public interface UserAccountRepository {
     UserAccount updateProfile(long userId, String fullName);
 
     void updatePasswordHash(long userId, String passwordHash);
+
+    boolean isEmailVerified(long userId);
+
+    void markEmailVerified(long userId, Instant verifiedAt);
 }

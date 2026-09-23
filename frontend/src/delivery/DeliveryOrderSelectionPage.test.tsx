@@ -62,6 +62,7 @@ describe("DeliveryOrderSelectionPage", () => {
     renderPage();
 
     expect(await screen.findByRole("heading", { name: "Select an order for delivery" })).toBeInTheDocument();
+    expect(screen.getByText("Ready For Delivery")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "ORD-DELIVERY-READY-ASHA" })).toBeInTheDocument();
     expect(screen.getByText("Asha Perera · asha.delivery@example.com")).toBeInTheDocument();
     expect(screen.getByText(/Product #9402 · Variant #9403/)).toBeInTheDocument();
@@ -85,7 +86,41 @@ describe("DeliveryOrderSelectionPage", () => {
     await user.type(screen.getByLabelText("Search delivery-ready orders"), "Asha");
     await user.click(screen.getByRole("button", { name: "Search" }));
 
-    await waitFor(() => expect(mockedGetEligibleOrders).toHaveBeenLastCalledWith("Asha", undefined));
+    await waitFor(() => expect(mockedGetEligibleOrders).toHaveBeenLastCalledWith("Asha", expect.any(AbortSignal)));
+  });
+
+  it("refreshes the current search without hiding existing orders while a new order loads", async () => {
+    const user = userEvent.setup();
+    const newlyReadyOrder = { ...readyOrder, orderId: 9102, orderNumber: "ORD-DELIVERY-READY-ASHA-2" };
+    let finishRefresh: ((orders: DeliveryEligibleOrder[]) => void) | undefined;
+    mockedGetEligibleOrders.mockResolvedValueOnce([readyOrder]);
+    mockedGetEligibleOrders.mockResolvedValueOnce([readyOrder]);
+    mockedGetEligibleOrders.mockImplementationOnce(() => new Promise((resolve) => {
+      finishRefresh = resolve;
+    }));
+    renderPage();
+    await screen.findByRole("heading", { name: readyOrder.orderNumber });
+
+    await user.type(screen.getByLabelText("Search delivery-ready orders"), "Asha");
+    await user.click(screen.getByRole("button", { name: "Search" }));
+    await waitFor(() => expect(mockedGetEligibleOrders).toHaveBeenCalledTimes(2));
+    await user.click(screen.getByRole("button", { name: "Refresh orders" }));
+
+    expect(screen.getByRole("heading", { name: readyOrder.orderNumber })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Asha")).toBeInTheDocument();
+    expect(screen.getByText("Refreshing eligible orders…")).toBeInTheDocument();
+    expect(mockedGetEligibleOrders).toHaveBeenLastCalledWith("Asha", undefined);
+
+    finishRefresh?.([readyOrder, newlyReadyOrder]);
+    expect(await screen.findByRole("heading", { name: newlyReadyOrder.orderNumber })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: readyOrder.orderNumber })).toBeInTheDocument();
+  });
+
+  it("reloads eligible orders when the window regains focus", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: readyOrder.orderNumber });
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() => expect(mockedGetEligibleOrders).toHaveBeenCalledTimes(2));
   });
 
   it("shows an empty state when no eligible orders remain", async () => {

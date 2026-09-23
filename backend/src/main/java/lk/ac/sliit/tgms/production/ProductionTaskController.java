@@ -440,12 +440,15 @@ public class ProductionTaskController {
             long orderItemId,
             long productId,
             long variantId,
+            String productName,
+            String productImageUrl,
             int quantity,
             String selectedSize,
             String selectedColor) {
         static EligibleOrderItemResponse from(OrderHandoffItem item) {
             return new EligibleOrderItemResponse(
-                    item.orderItemId(), item.productId(), item.variantId(), item.quantity(),
+                    item.orderItemId(), item.productId(), item.variantId(),
+                    item.productName(), item.productImageUrl(), item.quantity(),
                     item.selectedSize(), item.selectedColor());
         }
     }

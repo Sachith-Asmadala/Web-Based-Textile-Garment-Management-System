@@ -103,7 +103,7 @@ export function PublicHomePage() {
               <span className="inline-flex items-center gap-2"><CheckCircle2 aria-hidden="true" className="h-4 w-4 text-success" />Role-aware workspaces</span>
               <span className="inline-flex items-center gap-2"><CheckCircle2 aria-hidden="true" className="h-4 w-4 text-success" />Connected module records</span>
               <span className="inline-flex items-center gap-2 rounded-full border border-border bg-surface/85 px-3 py-1.5 backdrop-blur" aria-live="polite">
-                <span aria-hidden="true" className={`h-2 w-2 rounded-full ${apiState === "available" ? "bg-success" : apiState === "unavailable" ? "bg-danger" : "animate-pulse bg-warning"}`} />
+                <span aria-hidden="true" className={`h-2 w-2 rounded-full ${apiState === "available" ? "bg-success" : apiState === "unavailable" ? "bg-danger" : "animate-pulse bg-warning motion-reduce:animate-none"}`} />
                 {statusText}
                 <span className="sr-only">{apiState === "available" ? "API connection available" : apiState === "unavailable" ? "API connection unavailable" : "Checking API connection…"}</span>
               </span>
@@ -125,7 +125,7 @@ export function PublicHomePage() {
         </div>
         <div className="motion-stagger mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {modules.map(({ Icon, description, title }) => (
-            <article className="home-lower-glass motion-interactive-card group rounded-2xl border border-border p-6 transition duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-lg" key={title}>
+            <article className="home-lower-glass motion-interactive-card group rounded-2xl border border-border p-6 hover:border-primary/40" key={title}>
               <span className="grid h-12 w-12 place-items-center rounded-2xl bg-primary-soft text-primary transition group-hover:bg-primary group-hover:text-primary-foreground"><Icon aria-hidden="true" className="h-6 w-6" /></span>
               <h3 className="mt-5 text-lg font-bold text-foreground">{title}</h3>
               <p className="mt-2 text-sm leading-6 text-foreground-muted">{description}</p>

@@ -8,7 +8,7 @@ export type ProductionQualityControlResult = "PENDING" | "PASSED" | "FAILED";
 export type ProductionTaskRecordView = "ACTIVE" | "COMPLETED" | "ALL";
 
 export type InventoryMaterialType = "FABRIC" | "RAW_MATERIAL";
-export type InventoryMaterialStatus = "ACTIVE" | "INACTIVE" | "DISCONTINUED";
+export type InventoryMaterialStatus = "ACTIVE" | "INACTIVE";
 export type InventoryAvailabilityState = "AVAILABLE" | "INSUFFICIENT_STOCK" | "NOT_ACTIVE";
 export type InventoryStockState = "LOW_STOCK" | "SUFFICIENT";
 

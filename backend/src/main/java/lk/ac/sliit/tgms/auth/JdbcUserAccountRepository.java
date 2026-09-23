@@ -1,6 +1,8 @@
 package lk.ac.sliit.tgms.auth;
 
 import java.sql.PreparedStatement;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -51,11 +53,12 @@ public class JdbcUserAccountRepository implements UserAccountRepository {
     @Override
     public Optional<UserAccountSecurityState> findSecurityStateById(long id) {
         return jdbcTemplate.query(
-                        "SELECT id, role, is_active FROM users WHERE id = ?",
+                        "SELECT id, role, is_active, session_version FROM users WHERE id = ?",
                         (resultSet, rowNumber) -> new UserAccountSecurityState(
                                 resultSet.getLong("id"),
                                 UserRole.valueOf(resultSet.getString("role")),
-                                resultSet.getBoolean("is_active")),
+                                resultSet.getBoolean("is_active"),
+                                resultSet.getInt("session_version")),
                         id)
                 .stream()
                 .findFirst();
@@ -86,14 +89,18 @@ public class JdbcUserAccountRepository implements UserAccountRepository {
                 connection -> {
                     PreparedStatement statement = connection.prepareStatement(
                             """
-                            INSERT INTO users (email, password_hash, full_name, role)
-                            VALUES (?, ?, ?, ?)
+                            INSERT INTO users (
+                                email, password_hash, full_name, role, email_verified_at
+                            ) VALUES (?, ?, ?, ?, ?)
                             """,
                             new String[] {"id"});
                     statement.setString(1, normalizedEmail);
                     statement.setString(2, passwordHash);
                     statement.setString(3, fullName);
                     statement.setString(4, role.name());
+                    statement.setTimestamp(
+                            5,
+                            role == UserRole.CUSTOMER ? null : Timestamp.from(Instant.now()));
                     return statement;
                 },
                 keyHolder);
@@ -118,11 +125,41 @@ public class JdbcUserAccountRepository implements UserAccountRepository {
     @Override
     public void updatePasswordHash(long userId, String passwordHash) {
         int updated = jdbcTemplate.update(
-                "UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP(6) WHERE id = ?",
+                """
+                UPDATE users
+                SET password_hash = ?, session_version = session_version + 1,
+                    updated_at = CURRENT_TIMESTAMP(6)
+                WHERE id = ?
+                """,
                 passwordHash,
                 userId);
         if (updated != 1) {
             throw new IllegalStateException("Expected exactly one user password to be updated.");
+        }
+    }
+
+    @Override
+    public boolean isEmailVerified(long userId) {
+        Boolean verified = jdbcTemplate.queryForObject(
+                "SELECT email_verified_at IS NOT NULL FROM users WHERE id = ?",
+                Boolean.class,
+                userId);
+        return Boolean.TRUE.equals(verified);
+    }
+
+    @Override
+    public void markEmailVerified(long userId, Instant verifiedAt) {
+        int updated = jdbcTemplate.update(
+                """
+                UPDATE users
+                SET email_verified_at = COALESCE(email_verified_at, ?),
+                    updated_at = CURRENT_TIMESTAMP(6)
+                WHERE id = ?
+                """,
+                Timestamp.from(verifiedAt),
+                userId);
+        if (updated != 1) {
+            throw new IllegalStateException("Expected exactly one user email to be verified.");
         }
     }
 

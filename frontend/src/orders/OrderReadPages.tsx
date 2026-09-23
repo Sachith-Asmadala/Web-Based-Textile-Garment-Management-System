@@ -29,11 +29,12 @@ import {
   parseOrderPageId,
   staffOrderListPagePath,
 } from "../navigation/navigation";
+import { ProductImage } from "../products/ProductImage";
 
 type Audience = "staff" | "customer";
 
 const inputClassName =
-  "mt-2 w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20";
+  "mt-2 w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 aria-invalid:border-danger-border";
 
 const statuses: OrderStatus[] = [
   "PENDING",
@@ -45,6 +46,7 @@ const statuses: OrderStatus[] = [
 ];
 
 function statusLabel(status: OrderStatus) {
+  if (status === "READY_FOR_DELIVERY") return "Ready For Delivery";
   return status.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
@@ -55,6 +57,74 @@ function formatDate(value: string) {
 
 function money(value: string) {
   return `LKR ${value}`;
+}
+
+type PaymentField = "paymentStatus" | "amountPaid" | "paymentMethod";
+type PaymentFieldErrors = Partial<Record<PaymentField, string>>;
+
+function paymentStatusOptions(current: OrderPaymentStatus): OrderPaymentStatus[] {
+  switch (current) {
+    case "UNPAID":
+      return ["UNPAID", "PARTIALLY_PAID", "PAID"];
+    case "PARTIALLY_PAID":
+      return ["PARTIALLY_PAID", "PAID"];
+    case "PAID":
+      return ["PAID"];
+  }
+}
+
+function paymentStatusLabel(status: OrderPaymentStatus) {
+  return status === "PARTIALLY_PAID" ? "Partially paid" : status === "PAID" ? "Paid" : "Unpaid";
+}
+
+function decimalAmount(value: string) {
+  if (!/^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(value.trim())) return null;
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount : null;
+}
+
+function validatePaymentDraft(
+  billing: OrderBilling | null,
+  status: OrderPaymentStatus,
+  amountValue: string,
+  method: OrderPaymentMethod | "",
+): PaymentFieldErrors {
+  const errors: PaymentFieldErrors = {};
+  const invoiceTotal = billing?.invoice ? decimalAmount(billing.invoice.totalAmount) : null;
+  const amount = decimalAmount(amountValue);
+
+  if (amount === null) {
+    errors.amountPaid = "Enter a non-negative amount with up to 2 decimal places.";
+    return errors;
+  }
+  if (invoiceTotal === null) {
+    errors.amountPaid = "The invoice total is unavailable. Reload the order before recording payment.";
+    return errors;
+  }
+  if (status === "UNPAID" && amount !== 0) {
+    errors.amountPaid = "Unpaid records must have an amount paid of 0.00.";
+  }
+  if (status === "PARTIALLY_PAID" && (amount <= 0 || amount >= invoiceTotal)) {
+    errors.amountPaid = "Enter an amount greater than 0 and less than the invoice total.";
+  }
+  if (status === "PAID" && amount !== invoiceTotal) {
+    errors.amountPaid = `Paid amount must equal the invoice total of ${money(billing!.invoice!.totalAmount)}.`;
+  }
+  const currentPayment = billing?.payment;
+  if (
+    currentPayment?.paymentStatus === "PARTIALLY_PAID"
+    && status === "PARTIALLY_PAID"
+    && amount < Number(currentPayment.amountPaid)
+  ) {
+    errors.amountPaid = "Amount paid cannot be reduced because refunds/reversals are not enabled.";
+  }
+  if (status !== "UNPAID" && !method) {
+    errors.paymentMethod = "Select how the payment was recorded.";
+  }
+  if (status === "UNPAID" && method) {
+    errors.paymentMethod = "Unpaid records cannot have a payment method.";
+  }
+  return errors;
 }
 
 function detailPath(audience: Audience, orderId: number) {
@@ -104,6 +174,29 @@ function OrderListPage({ audience }: { audience: Audience }) {
     // The initial fetch intentionally ignores draft staff filters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audience]);
+
+  useEffect(() => {
+    if (audience !== "staff") return undefined;
+
+    function refreshStaffOrders() {
+      void load(undefined, activeSearch, activeStatus);
+    }
+
+    function refreshWhenVisible() {
+      if (document.visibilityState === "visible") {
+        refreshStaffOrders();
+      }
+    }
+
+    window.addEventListener("focus", refreshStaffOrders);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.removeEventListener("focus", refreshStaffOrders);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+    // Staff order list should refetch with the latest applied filters when the tab is revisited.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audience, activeSearch, activeStatus]);
 
   function applyFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -199,9 +292,17 @@ function OrderListPage({ audience }: { audience: Audience }) {
                 {orders.map((order) => (
                   <article className="motion-record rounded-3xl border border-border bg-surface/70 p-6" key={order.id}>
                     <div className="flex flex-wrap items-start justify-between gap-4">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.16em] text-muted">Order #{order.id}</p>
-                        <h2 className="mt-2 text-xl font-bold text-foreground">{order.orderNumber}</h2>
+                      <div className="flex min-w-0 gap-4">
+                        <ProductImage
+                          alt={`${order.previewProductName ?? order.orderNumber} order preview`}
+                          className="h-20 w-20 shrink-0 rounded-xl border border-border"
+                          productName={order.previewProductName ?? order.orderNumber}
+                          src={order.previewProductImageUrl}
+                        />
+                        <div className="min-w-0">
+                          <p className="text-xs uppercase tracking-[0.16em] text-muted">Order #{order.id}</p>
+                          <h2 className="mt-2 text-xl font-bold text-foreground">{order.orderNumber}</h2>
+                        </div>
                       </div>
                       <StatusBadge status={order.status} />
                     </div>
@@ -257,9 +358,11 @@ function OrderDetailPage({ audience }: { audience: Audience }) {
   const [paymentMethod, setPaymentMethod] = useState<OrderPaymentMethod | "">("");
   const [paymentReference, setPaymentReference] = useState("");
   const [paymentNote, setPaymentNote] = useState("");
+  const [paymentFieldErrors, setPaymentFieldErrors] = useState<PaymentFieldErrors>({});
 
   function applyBilling(nextBilling: OrderBilling) {
     setBilling(nextBilling);
+    setPaymentFieldErrors({});
     if (nextBilling.payment) {
       setPaymentStatus(nextBilling.payment.paymentStatus);
       setAmountPaid(nextBilling.payment.amountPaid);
@@ -345,9 +448,22 @@ function OrderDetailPage({ audience }: { audience: Audience }) {
   async function submitPaymentUpdate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (audience !== "staff" || parsedOrderId === null) return;
+    const draftErrors = validatePaymentDraft(
+      billing,
+      paymentStatus,
+      amountPaid,
+      paymentMethod,
+    );
+    if (Object.keys(draftErrors).length > 0) {
+      setPaymentFieldErrors(draftErrors);
+      setBillingError("Please correct the highlighted payment fields.");
+      setBillingMessage(null);
+      return;
+    }
     setIsSavingBilling(true);
     setBillingError(null);
     setBillingMessage(null);
+    setPaymentFieldErrors({});
     try {
       const response = await updateOrderPayment(parsedOrderId, {
         paymentStatus,
@@ -363,9 +479,25 @@ function OrderDetailPage({ audience }: { audience: Audience }) {
         paymentError,
         "Payment record could not be updated. Please try again.",
       );
+      setPaymentFieldErrors(apiError.fields);
       setBillingError(Object.values(apiError.fields)[0] ?? apiError.message);
     } finally {
       setIsSavingBilling(false);
+    }
+  }
+
+  function changePaymentStatus(nextStatus: OrderPaymentStatus) {
+    setPaymentStatus(nextStatus);
+    setPaymentFieldErrors({});
+    setBillingError(null);
+    setBillingMessage(null);
+    if (nextStatus === "UNPAID") {
+      setAmountPaid("0.00");
+      setPaymentMethod("");
+    } else if (nextStatus === "PAID" && billing?.invoice) {
+      setAmountPaid(billing.invoice.totalAmount);
+    } else if (billing?.payment?.paymentStatus === "UNPAID") {
+      setAmountPaid("");
     }
   }
 
@@ -450,26 +582,64 @@ function OrderDetailPage({ audience }: { audience: Audience }) {
                 {billing.payment && (
                   <p className="text-sm text-muted">Recorded amount: <span className="font-semibold text-foreground">{money(billing.payment.amountPaid)}</span>{billing.payment.paymentMethod ? ` · ${billing.payment.paymentMethod.replaceAll("_", " ")}` : ""}</p>
                 )}
-                {audience === "staff" && billing.payment && order.status !== "CANCELLED" && (
-                  <form className="grid gap-3 sm:grid-cols-2" onSubmit={submitPaymentUpdate}>
-                    <label className="text-sm font-medium text-foreground">Payment status
-                      <select className={inputClassName} onChange={(event) => setPaymentStatus(event.target.value as OrderPaymentStatus)} value={paymentStatus}>
-                        <option value="UNPAID">Unpaid</option>
-                        <option value="PARTIALLY_PAID">Partially paid</option>
-                        <option value="PAID">Paid</option>
+                {audience === "staff" && billing.payment && order.status !== "CANCELLED" && billing.payment.paymentStatus !== "PAID" && (
+                  <form className="grid gap-3 sm:grid-cols-2" noValidate onSubmit={submitPaymentUpdate}>
+                    <div className="text-sm font-medium text-foreground">
+                      <label htmlFor="order-payment-status">Payment status</label>
+                      <select
+                        aria-invalid={Boolean(paymentFieldErrors.paymentStatus)}
+                        className={inputClassName}
+                        id="order-payment-status"
+                        onChange={(event) => changePaymentStatus(event.target.value as OrderPaymentStatus)}
+                        value={paymentStatus}
+                      >
+                        {paymentStatusOptions(billing.payment.paymentStatus).map((status) => (
+                          <option key={status} value={status}>{paymentStatusLabel(status)}</option>
+                        ))}
                       </select>
-                    </label>
-                    <label className="text-sm font-medium text-foreground">Amount paid
-                      <input className={inputClassName} inputMode="decimal" min="0" onChange={(event) => setAmountPaid(event.target.value)} step="0.01" type="text" value={amountPaid} />
-                    </label>
-                    <label className="text-sm font-medium text-foreground">Payment method
-                      <select className={inputClassName} onChange={(event) => setPaymentMethod(event.target.value as OrderPaymentMethod | "")} value={paymentMethod}>
+                      {paymentFieldErrors.paymentStatus && <span className="mt-2 block text-xs text-danger">{paymentFieldErrors.paymentStatus}</span>}
+                    </div>
+                    <div className="text-sm font-medium text-foreground">
+                      <label htmlFor="order-payment-amount">Amount paid</label>
+                      <input
+                        aria-invalid={Boolean(paymentFieldErrors.amountPaid)}
+                        className={inputClassName}
+                        disabled={paymentStatus === "UNPAID" || paymentStatus === "PAID"}
+                        id="order-payment-amount"
+                        inputMode="decimal"
+                        min="0"
+                        onChange={(event) => {
+                          setAmountPaid(event.target.value);
+                          setPaymentFieldErrors((current) => ({ ...current, amountPaid: undefined }));
+                        }}
+                        step="0.01"
+                        type="text"
+                        value={amountPaid}
+                      />
+                      {paymentStatus === "PAID" && billing.invoice && <span className="mt-2 block text-xs text-muted">Automatically set to the invoice total of {money(billing.invoice.totalAmount)}.</span>}
+                      {paymentStatus === "UNPAID" && <span className="mt-2 block text-xs text-muted">Unpaid records are fixed at LKR 0.00.</span>}
+                      {paymentFieldErrors.amountPaid && <span className="mt-2 block text-xs text-danger">{paymentFieldErrors.amountPaid}</span>}
+                    </div>
+                    <div className="text-sm font-medium text-foreground">
+                      <label htmlFor="order-payment-method">Payment method{paymentStatus !== "UNPAID" ? " (required)" : ""}</label>
+                      <select
+                        aria-invalid={Boolean(paymentFieldErrors.paymentMethod)}
+                        className={inputClassName}
+                        disabled={paymentStatus === "UNPAID"}
+                        id="order-payment-method"
+                        onChange={(event) => {
+                          setPaymentMethod(event.target.value as OrderPaymentMethod | "");
+                          setPaymentFieldErrors((current) => ({ ...current, paymentMethod: undefined }));
+                        }}
+                        value={paymentMethod}
+                      >
                         <option value="">Not applicable / select</option>
                         <option value="CASH">Cash</option>
                         <option value="BANK_TRANSFER">Bank transfer</option>
                         <option value="OTHER">Other</option>
                       </select>
-                    </label>
+                      {paymentFieldErrors.paymentMethod && <span className="mt-2 block text-xs text-danger">{paymentFieldErrors.paymentMethod}</span>}
+                    </div>
                     <label className="text-sm font-medium text-foreground">Reference
                       <input className={inputClassName} maxLength={120} onChange={(event) => setPaymentReference(event.target.value)} value={paymentReference} />
                     </label>
@@ -481,6 +651,11 @@ function OrderDetailPage({ audience }: { audience: Audience }) {
                     </button>
                   </form>
                 )}
+                {audience === "staff" && billing.payment?.paymentStatus === "PAID" && (
+                  <p className="rounded-xl border border-success-border bg-success-soft p-4 text-sm text-success">
+                    Payment is fully recorded. Refund and reversal workflows are not enabled, so this record is read-only.
+                  </p>
+                )}
               </div>
             )}
             {billingError && <p className="mt-3 text-sm text-danger" role="alert">{billingError}</p>}
@@ -490,6 +665,11 @@ function OrderDetailPage({ audience }: { audience: Audience }) {
           {audience === "staff" && (
             <section className="mt-7 rounded-2xl border border-border bg-background/50 p-5" aria-labelledby="status-update-heading">
               <h2 className="text-lg font-bold text-foreground" id="status-update-heading">Update order status</h2>
+              {order.status === "CONFIRMED" && (
+                <p className="mt-2 text-sm text-muted">
+                  Production progress is owned by Production Management. Cancellation is the only remaining manual order action at this stage.
+                </p>
+              )}
               {order.allowedStatusTransitions.length > 0 ? (
                 <form className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={submitStatusUpdate}>
                   <label className="min-w-0 flex-1 text-sm font-medium text-foreground">
@@ -515,9 +695,13 @@ function OrderDetailPage({ audience }: { audience: Audience }) {
                 </form>
               ) : (
                 <p className="mt-3 text-sm text-muted">
-                  {order.status === "READY_FOR_DELIVERY"
-                    ? "Final order completion is synchronized by Delivery Management after the delivery is marked delivered."
-                    : "This order is in a terminal status and has no permitted next transition."}
+                  {order.status === "CONFIRMED"
+                    ? "The order is ready for Production Management. Starting production updates this order automatically."
+                    : order.status === "IN_PRODUCTION"
+                      ? "Production Management controls progress and marks the order ready for delivery when all required work is complete."
+                      : order.status === "READY_FOR_DELIVERY"
+                        ? "Production preparation is complete. Sales can prepare and schedule delivery."
+                        : "This order is in a terminal status and has no permitted next transition."}
                 </p>
               )}
               {statusUpdateError && <p className="mt-3 text-sm text-danger" role="alert">{statusUpdateError}</p>}
@@ -544,17 +728,25 @@ function OrderDetailPage({ audience }: { audience: Audience }) {
 
           <div className="mt-8">
             <h2 className="text-xl font-bold text-foreground">Items</h2>
-            <p className="mt-2 text-sm text-muted">Size, color and price shown below are the stored order-time snapshots. Product name is the current catalog label for the referenced stable Product ID.</p>
+            <p className="mt-2 text-sm text-muted">Product name, image, size, color and price shown below come from the stored order-time snapshots; the stable Product ID is retained only as the historical catalog reference.</p>
             <div className="mt-4 space-y-4">
               {order.items.map((item) => (
                 <article className="rounded-2xl border border-border bg-background/60 p-5" key={item.id}>
-                  <div className="flex flex-wrap justify-between gap-4">
-                    <div>
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex min-w-0 gap-4">
+                      <ProductImage
+                        alt={`${item.productName} ordered garment`}
+                        className="h-24 w-24 shrink-0 rounded-xl border border-border"
+                        productName={item.productName}
+                        src={item.productImageUrl}
+                      />
+                      <div className="min-w-0">
                       <h3 className="font-semibold text-foreground">{item.productName}</h3>
                       <p className="mt-1 text-xs text-muted">Product #{item.productId} · Variant #{item.variantId} · Line #{item.id}</p>
                       <p className="mt-2 text-sm text-foreground-muted">{item.selectedSize} · {item.selectedColor} · Qty {item.quantity}</p>
+                      </div>
                     </div>
-                    <div className="text-right">
+                    <div className="text-left sm:text-right">
                       <p className="text-sm text-muted">{money(item.unitPriceSnapshot)} each</p>
                       <p className="mt-1 text-lg font-bold text-foreground">{money(item.lineTotal)}</p>
                     </div>

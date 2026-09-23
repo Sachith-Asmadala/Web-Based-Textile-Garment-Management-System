@@ -1,9 +1,8 @@
--- TGMS presentation data reset and seed.
--- NOT a Liquibase migration. Run only through scripts/demo/reset-demo.sh on a disposable demo/dev DB.
--- Product media is referenced by database values; the UI contains no product-to-image mapping.
+-- Disposable demonstration data for TGMS.
+-- Execute only through scripts/demo/reset-demo.sh against a non-production database.
 START TRANSACTION;
 
--- Remove only records owned by the reserved demo identities and DEMO identifiers.
+-- Delete only records identified by the reserved demo accounts and identifiers.
 DELETE FROM notifications
 WHERE recipient_user_id IN (SELECT id FROM users WHERE email LIKE 'demo.%@tgms.example');
 DELETE FROM password_reset_tokens
@@ -72,24 +71,25 @@ DELETE p FROM garment_products p
 JOIN garment_categories c ON c.id = p.category_id
 WHERE c.description LIKE '%[DEMO_SEED]%';
 DELETE FROM garment_categories WHERE description LIKE '%[DEMO_SEED]%';
--- Remove the legacy single-product presentation seed during upgrade.
+-- Remove records from the retired single-product demonstration seed.
 DELETE FROM garment_product_variants
 WHERE product_id IN (SELECT id FROM garment_products WHERE name = '[DEMO] Essential Polo');
 DELETE FROM garment_products WHERE name = '[DEMO] Essential Polo';
 DELETE FROM garment_categories WHERE name = '[DEMO] Presentation Collection';
 DELETE FROM users WHERE email LIKE 'demo.%@tgms.example';
 
--- @demo_password_hash is generated from runtime-only DEMO_USER_PASSWORD by reset-demo.sh.
--- No plaintext credential or reusable password hash is stored in this repository.
-INSERT INTO users (email, password_hash, full_name, role, is_active) VALUES
-('demo.admin@tgms.example', @demo_password_hash, 'Nadeesha Perera', 'ADMINISTRATOR', TRUE),
-('demo.supplier@tgms.example', @demo_password_hash, 'Chathura Bandara', 'SUPPLIER', TRUE),
-('demo.inventory@tgms.example', @demo_password_hash, 'Tharushi Senanayake', 'INVENTORY_MANAGER', TRUE),
-('demo.production@tgms.example', @demo_password_hash, 'Kasun Jayawardena', 'PRODUCTION_MANAGER', TRUE),
-('demo.sales@tgms.example', @demo_password_hash, 'Dinithi Fernando', 'SALES_OFFICER', TRUE),
-('demo.customer@tgms.example', @demo_password_hash, 'Kavindu Dissanayake', 'CUSTOMER', TRUE);
+-- The reset script generates @demo_password_hash from the runtime-only demo password.
+INSERT INTO users (
+    email, password_hash, full_name, role, is_active, email_verified_at
+) VALUES
+('demo.admin@tgms.example', @demo_password_hash, 'Nadeesha Perera', 'ADMINISTRATOR', TRUE, CURRENT_TIMESTAMP(6)),
+('demo.supplier@tgms.example', @demo_password_hash, 'Chathura Bandara', 'SUPPLIER', TRUE, CURRENT_TIMESTAMP(6)),
+('demo.inventory@tgms.example', @demo_password_hash, 'Tharushi Senanayake', 'INVENTORY_MANAGER', TRUE, CURRENT_TIMESTAMP(6)),
+('demo.production@tgms.example', @demo_password_hash, 'Kasun Jayawardena', 'PRODUCTION_MANAGER', TRUE, CURRENT_TIMESTAMP(6)),
+('demo.sales@tgms.example', @demo_password_hash, 'Dinithi Fernando', 'SALES_OFFICER', TRUE, CURRENT_TIMESTAMP(6)),
+('demo.customer@tgms.example', @demo_password_hash, 'Kavindu Dissanayake', 'CUSTOMER', TRUE, CURRENT_TIMESTAMP(6));
 
--- Sri Lankan supplier and material catalog.
+-- Supplier and material catalogue records.
 INSERT INTO supplier_profiles (user_id, business_name, contact_phone, address)
 SELECT id, 'Serendib Textiles (Pvt) Ltd', '+94 37 223 4185',
        'Pannala Industrial Estate, Kuliyapitiya, Sri Lanka'
@@ -152,7 +152,7 @@ SELECT ms.id,
 FROM material_supplies ms
 WHERE ms.material_code LIKE 'DEMO-%';
 
--- Database-driven Sri Lankan garment catalog with local project media paths.
+-- Garment catalogue records with local media references.
 INSERT INTO garment_categories (name, description, status) VALUES
 ('Batik Menswear', '[DEMO_SEED] Contemporary Sri Lankan batik garments.', 'ACTIVE'),
 ('Handloom Collection', '[DEMO_SEED] Locally inspired handloom apparel.', 'ACTIVE'),
@@ -191,7 +191,7 @@ JOIN (
     UNION ALL SELECT 'Colombo Classic Polo', 'L', 'Forest Green', 4200.00
 ) seed ON seed.product_name = p.name;
 
--- Quotations demonstrate Sales-owned pricing snapshots.
+-- Issued quotations with immutable pricing snapshots.
 INSERT INTO quotations (quotation_number, customer_id, issued_by_user_id, issued_at)
 SELECT 'DEMO-QUO-001', customer.id, sales.id, CURRENT_TIMESTAMP(6) - INTERVAL 8 DAY
 FROM users customer JOIN users sales
@@ -208,7 +208,7 @@ JOIN garment_products p ON p.name = 'Ceylon Batik Resort Shirt'
 JOIN garment_product_variants v ON v.product_id = p.id AND v.size = 'M'
 WHERE q.quotation_number = 'DEMO-QUO-001';
 
--- Orders cover pending, production, delivery-ready, and completed lifecycle states.
+-- Orders representing the principal lifecycle states.
 INSERT INTO orders (customer_id, order_number, status, created_at, updated_at)
 SELECT customer.id, seed.order_number, seed.status,
        CURRENT_TIMESTAMP(6) - INTERVAL seed.age_days DAY,
@@ -219,13 +219,16 @@ JOIN (
     UNION ALL SELECT 'DEMO-ORD-002', 'IN_PRODUCTION', 7, 8
     UNION ALL SELECT 'DEMO-ORD-003', 'READY_FOR_DELIVERY', 12, 3
     UNION ALL SELECT 'DEMO-ORD-004', 'COMPLETED', 20, 24
+    UNION ALL SELECT 'DEMO-ORD-005', 'READY_FOR_DELIVERY', 9, 2
 ) seed ON TRUE
 WHERE customer.email = 'demo.customer@tgms.example';
 
 INSERT INTO order_items (
-    order_id, product_id, variant_id, quantity, selected_size, selected_color, unit_price_snapshot
+    order_id, product_id, variant_id, product_name_snapshot, product_image_url_snapshot,
+    quantity, selected_size, selected_color, unit_price_snapshot
 )
-SELECT o.id, p.id, MIN(v.id), seed.quantity, seed.size, seed.color, MIN(v.price)
+SELECT o.id, p.id, MIN(v.id), p.name, p.image_url,
+       seed.quantity, seed.size, seed.color, MIN(v.price)
 FROM orders o
 JOIN (
     SELECT 'DEMO-ORD-001' order_number, 'Ceylon Batik Resort Shirt' product_name,
@@ -236,11 +239,13 @@ JOIN (
            'M', 'Cinnamon', 6
     UNION ALL SELECT 'DEMO-ORD-004', 'Colombo Classic Polo',
            'L', 'Forest Green', 20
+    UNION ALL SELECT 'DEMO-ORD-005', 'Ceylon Batik Resort Shirt',
+           'L', 'Ocean Teal', 10
 ) seed ON seed.order_number = o.order_number
 JOIN garment_products p ON p.name = seed.product_name
 JOIN garment_product_variants v ON v.product_id = p.id
     AND v.size = seed.size AND v.color = seed.color
-GROUP BY o.id, p.id, seed.quantity, seed.size, seed.color;
+GROUP BY o.id, p.id, p.name, p.image_url, seed.quantity, seed.size, seed.color;
 
 INSERT INTO order_status_history (order_id, from_status, to_status, changed_by_user_id, changed_at)
 SELECT o.id, transitions.from_status, transitions.to_status,
@@ -257,11 +262,14 @@ JOIN (
     UNION ALL SELECT 'DEMO-ORD-004', 'CONFIRMED', 'IN_PRODUCTION', 360
     UNION ALL SELECT 'DEMO-ORD-004', 'IN_PRODUCTION', 'READY_FOR_DELIVERY', 96
     UNION ALL SELECT 'DEMO-ORD-004', 'READY_FOR_DELIVERY', 'COMPLETED', 24
+    UNION ALL SELECT 'DEMO-ORD-005', 'PENDING', 'CONFIRMED', 200
+    UNION ALL SELECT 'DEMO-ORD-005', 'CONFIRMED', 'IN_PRODUCTION', 150
+    UNION ALL SELECT 'DEMO-ORD-005', 'IN_PRODUCTION', 'READY_FOR_DELIVERY', 8
 ) transitions ON transitions.order_number = o.order_number
 JOIN users sales ON sales.email = 'demo.sales@tgms.example'
 JOIN users production ON production.email = 'demo.production@tgms.example';
 
--- Billing covers unpaid, part-paid, and paid examples.
+-- Invoice and payment records across settlement states.
 INSERT INTO order_invoices (order_id, invoice_number, total_amount, issued_by_user_id, issued_at)
 SELECT o.id, REPLACE(o.order_number, 'ORD', 'INV'),
        SUM(oi.quantity * oi.unit_price_snapshot), sales.id,
@@ -299,7 +307,7 @@ JOIN orders o ON o.id = i.order_id
 JOIN users sales ON sales.email = 'demo.sales@tgms.example'
 WHERE o.order_number LIKE 'DEMO-ORD-%';
 
--- Production records show in-progress and completed work with material traceability.
+-- Production records with material traceability and quality-control results.
 INSERT INTO production_tasks (
     task_number, order_id, status, started_at, completed_at,
     quality_control_result, quality_checked_by_user_id, quality_checked_at,
@@ -321,6 +329,7 @@ JOIN (
            'IN_PROGRESS' status, 70 started_hours, 8 completed_hours
     UNION ALL SELECT 'DEMO-ORD-003', 'DEMO-PRD-003', 'COMPLETED', 160, 30
     UNION ALL SELECT 'DEMO-ORD-004', 'DEMO-PRD-004', 'COMPLETED', 350, 100
+    UNION ALL SELECT 'DEMO-ORD-005', 'DEMO-PRD-005', 'COMPLETED', 140, 10
 ) seed ON seed.order_number = o.order_number
 JOIN users production ON production.email = 'demo.production@tgms.example';
 
@@ -331,11 +340,13 @@ SELECT pt.id,
        CASE pt.task_number
            WHEN 'DEMO-PRD-002' THEN 'Cut, align woven borders, stitch, press, and perform finishing checks.'
            WHEN 'DEMO-PRD-003' THEN 'Cut linen panels, assemble bodice and skirt, attach buttons, and finish hems.'
+           WHEN 'DEMO-PRD-005' THEN 'Cut batik shirt panels, match print direction, stitch collars and sleeves, press, and inspect.'
            ELSE 'Cut piqué panels, assemble collar and placket, stitch, press, and inspect.'
        END,
        CASE pt.task_number
            WHEN 'DEMO-PRD-002' THEN 'Sewing Line B · Supervisor Anjali Wickramasinghe'
            WHEN 'DEMO-PRD-003' THEN 'Sewing Line C · Supervisor Malini Rathnayake'
+           WHEN 'DEMO-PRD-005' THEN 'Sewing Line D · Supervisor Chamari Peiris'
            ELSE 'Sewing Line A · Supervisor Sahan Weerakoon'
        END,
        'Follow the approved LankaWear measurement sheet and record quality exceptions.'
@@ -355,6 +366,9 @@ JOIN (
     UNION ALL SELECT 'DEMO-PRD-004', 'DEMO-INV-FAB-PIQUE-004', 80.000
     UNION ALL SELECT 'DEMO-PRD-004', 'DEMO-INV-RAW-THREAD-005', 4.000
     UNION ALL SELECT 'DEMO-PRD-004', 'DEMO-INV-RAW-BUTTON-006', 60.000
+    UNION ALL SELECT 'DEMO-PRD-005', 'DEMO-INV-FAB-BATIK-001', 42.000
+    UNION ALL SELECT 'DEMO-PRD-005', 'DEMO-INV-RAW-THREAD-005', 2.000
+    UNION ALL SELECT 'DEMO-PRD-005', 'DEMO-INV-RAW-BUTTON-006', 40.000
 ) seed ON seed.task_number = pt.task_number
 JOIN inventory_materials im ON im.material_code = seed.material_code;
 
@@ -369,7 +383,7 @@ JOIN production_tasks pt ON pt.id = requirement.production_task_id
 JOIN users production ON production.email = 'demo.production@tgms.example'
 WHERE pt.status = 'COMPLETED';
 
--- Delivery records use real Sri Lankan addresses and different lifecycle states.
+-- Delivery records across lifecycle states.
 INSERT INTO deliveries (
     delivery_number, order_id, scheduled_at, delivery_address,
     delivery_notes, status, created_at, updated_at

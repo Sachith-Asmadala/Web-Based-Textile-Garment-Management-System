@@ -92,6 +92,26 @@ describe("NotificationsPage", () => {
     expect(mockedGetNotifications).toHaveBeenLastCalledWith(true, expect.any(AbortSignal));
   });
 
+  it("animates unread-only notification removal after a successful update", async () => {
+    const user = userEvent.setup();
+    mockedGetNotifications
+      .mockResolvedValueOnce(inbox)
+      .mockResolvedValueOnce({ notifications: [inbox.notifications[0]], unreadCount: 1 });
+
+    render(<NotificationsPage />);
+    await screen.findByRole("heading", { name: "Notifications" });
+    await user.click(screen.getByLabelText("Show unread notifications only"));
+    expect(await screen.findByText("Low stock: FAB-81")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Mark read" }));
+    expect(mockedMarkNotificationRead).toHaveBeenCalledWith(81);
+    const removingNotification = screen.getByText("Low stock: FAB-81").closest("li");
+    await waitFor(() => expect(removingNotification).toHaveAttribute("data-motion-state", "closed"));
+    expect(removingNotification).toHaveAttribute("inert");
+    await waitFor(() => expect(screen.queryByText("Low stock: FAB-81")).not.toBeInTheDocument());
+    expect(await screen.findByRole("heading", { name: "All caught up" })).toBeInTheDocument();
+  });
+
   it("marks every unread notification read", async () => {
     const user = userEvent.setup();
     render(<NotificationsPage />);

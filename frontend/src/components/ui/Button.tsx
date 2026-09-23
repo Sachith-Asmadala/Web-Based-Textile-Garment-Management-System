@@ -30,7 +30,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       {...props}
     >
       {isLoading ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : null}
-      <span className="transition-opacity duration-150">{children}</span>
+      <span className="transition-opacity duration-[var(--motion-fast)]">{children}</span>
     </button>
   );
 });

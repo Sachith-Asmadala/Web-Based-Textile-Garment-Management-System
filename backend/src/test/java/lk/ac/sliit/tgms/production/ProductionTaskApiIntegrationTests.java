@@ -15,6 +15,7 @@ import lk.ac.sliit.tgms.auth.AuthCookieService;
 import lk.ac.sliit.tgms.auth.AuthTokenService;
 import lk.ac.sliit.tgms.auth.UserAccount;
 import lk.ac.sliit.tgms.auth.UserRole;
+import lk.ac.sliit.tgms.order.OrderService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,6 +38,9 @@ class ProductionTaskApiIntegrationTests {
 
     @Autowired
     private AuthTokenService authTokenService;
+
+    @Autowired
+    private OrderService orderService;
 
     private MockMvc mockMvc;
 
@@ -596,6 +600,21 @@ class ProductionTaskApiIntegrationTests {
                 .andExpect(jsonPath("$.task.task.completedAt").isNotEmpty())
                 .andExpect(jsonPath("$.task.order.currentStatus").value("READY_FOR_DELIVERY"));
 
+        mockMvc.perform(put("/api/production/tasks/7730/details")
+                        .cookie(production)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"workDetails\":\"Rewrite history\",\"workAssignment\":\"Another line\",\"workNotes\":null}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("PRODUCTION_TASK_COMPLETED"));
+
+        mockMvc.perform(put("/api/production/tasks/7730/materials")
+                        .cookie(production)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"materials\":[{\"inventoryMaterialId\":7801,\"requiredQuantity\":5}]}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code")
+                        .value("PRODUCTION_MATERIAL_REQUIREMENTS_LOCKED"));
+
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT status FROM production_tasks WHERE id = 7730", String.class))
                 .isEqualTo("COMPLETED");
@@ -637,6 +656,10 @@ class ProductionTaskApiIntegrationTests {
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT status FROM orders WHERE id = 7501", String.class))
                 .isEqualTo("IN_PRODUCTION");
+        mockMvc.perform(get("/api/deliveries/eligible-orders")
+                        .cookie(sessionFor(7998, UserRole.SALES_OFFICER)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.orderId == 7501)]").isEmpty());
 
         mockMvc.perform(patch("/api/production/tasks/7732/status")
                         .cookie(production)
@@ -644,6 +667,18 @@ class ProductionTaskApiIntegrationTests {
                         .content("{\"status\":\"COMPLETED\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.task.order.currentStatus").value("READY_FOR_DELIVERY"));
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM order_status_history WHERE order_id = 7501 AND from_status = 'IN_PRODUCTION' AND to_status = 'READY_FOR_DELIVERY'",
+                Integer.class)).isEqualTo(1);
+        mockMvc.perform(get("/api/deliveries/eligible-orders")
+                        .cookie(sessionFor(7998, UserRole.SALES_OFFICER)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.orderId == 7501)].readyForDelivery")
+                        .value(org.hamcrest.Matchers.contains(true)));
+        orderService.synchronizeProductionCompleted(7999, 7501);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM order_status_history WHERE order_id = 7501 AND from_status = 'IN_PRODUCTION' AND to_status = 'READY_FOR_DELIVERY'",
+                Integer.class)).isEqualTo(1);
     }
 
     @Test
@@ -789,7 +824,7 @@ class ProductionTaskApiIntegrationTests {
         jdbcTemplate.update(
                 "INSERT INTO inventory_materials (id, material_code, material_name, material_type, unit_of_measure, current_quantity, low_stock_threshold, status) VALUES (7802, 'RAW-PROD-002', 'Polyester Thread', 'RAW_MATERIAL', 'cone', 5.000, 2.000, 'ACTIVE')");
         jdbcTemplate.update(
-                "INSERT INTO inventory_materials (id, material_code, material_name, material_type, unit_of_measure, current_quantity, low_stock_threshold, status) VALUES (7803, 'FAB-PROD-003', 'Archived Fabric', 'FABRIC', 'metre', 50.000, 10.000, 'DISCONTINUED')");
+                "INSERT INTO inventory_materials (id, material_code, material_name, material_type, unit_of_measure, current_quantity, low_stock_threshold, status) VALUES (7803, 'FAB-PROD-003', 'Inactive Fabric', 'FABRIC', 'metre', 50.000, 10.000, 'INACTIVE')");
     }
 
     private void insertOrder(long orderId, String orderNumber, String status, long orderItemId) {
@@ -799,9 +834,10 @@ class ProductionTaskApiIntegrationTests {
         jdbcTemplate.update(
                 """
                 INSERT INTO order_items (
-                    id, order_id, product_id, variant_id, quantity,
+                    id, order_id, product_id, variant_id, product_name_snapshot,
+                    product_image_url_snapshot, quantity,
                     selected_size, selected_color, unit_price_snapshot
-                ) VALUES (?, ?, 7201, 7301, 3, 'L', 'Navy', 3100.00)
+                ) VALUES (?, ?, 7201, 7301, 'Production order product', NULL, 3, 'L', 'Navy', 3100.00)
                 """,
                 orderItemId, orderId);
     }

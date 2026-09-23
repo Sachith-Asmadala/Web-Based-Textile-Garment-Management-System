@@ -2,6 +2,14 @@ import axios from "axios";
 
 import { api } from "./client";
 
+export const NOTIFICATIONS_CHANGED_EVENT = "tgms:notifications-changed";
+
+function announceNotificationsChanged() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(NOTIFICATIONS_CHANGED_EVENT));
+  }
+}
+
 export type NotificationKind =
   | "LOW_STOCK"
   | "ORDER_STATUS"
@@ -60,11 +68,13 @@ export async function markNotificationRead(notificationId: number) {
   const response = await api.patch<{ message: string }>(
     `/notifications/${notificationId}/read`,
   );
+  announceNotificationsChanged();
   return response.data;
 }
 
 export async function markAllNotificationsRead() {
   const response = await api.patch<{ message: string }>("/notifications/read-all");
+  announceNotificationsChanged();
   return response.data;
 }
 

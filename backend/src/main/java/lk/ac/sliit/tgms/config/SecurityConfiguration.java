@@ -45,6 +45,8 @@ public class SecurityConfiguration {
             "/api/auth/register",
             "/api/auth/login",
             "/api/auth/logout",
+            "/api/auth/email-verification/resend",
+            "/api/auth/email-verification/confirm",
             "/api/auth/password-reset/request",
             "/api/auth/password-reset/confirm",
             "/api/health");
@@ -54,7 +56,9 @@ public class SecurityConfiguration {
             return false;
         }
         String path = request.getRequestURI();
-        return "/api/products".equals(path) || path.startsWith("/api/products/catalog/");
+        return "/api/products".equals(path)
+                || path.startsWith("/api/products/catalog/")
+                || path.startsWith("/api/product-images/");
     }
 
     @Bean
@@ -131,7 +135,10 @@ public class SecurityConfiguration {
 
             var storedState = userAccountRepository.findSecurityStateById(userId);
             if (storedState.isPresent()) {
-                if (!storedState.get().active()) {
+                Number tokenSessionVersion = jwt.getClaim("session_version");
+                if (!storedState.get().active()
+                        || tokenSessionVersion == null
+                        || tokenSessionVersion.intValue() != storedState.get().sessionVersion()) {
                     throw invalidSession();
                 }
                 return List.of(new SimpleGrantedAuthority(
@@ -169,13 +176,16 @@ public class SecurityConfiguration {
                                 "/api/health",
                                 "/api/auth/session",
                                 "/api/products",
-                                "/api/products/catalog/**")
+                                "/api/products/catalog/**",
+                                "/api/product-images/**")
                         .permitAll()
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/auth/register",
                                 "/api/auth/login",
                                 "/api/auth/logout",
+                                "/api/auth/email-verification/resend",
+                                "/api/auth/email-verification/confirm",
                                 "/api/auth/password-reset/request",
                                 "/api/auth/password-reset/confirm")
                         .permitAll()

@@ -29,6 +29,7 @@ export const dashboardPagePaths: Record<UserRole, string> = {
 };
 
 export const adminUserManagementPagePath = "/admin/users";
+export const emailVerificationPagePath = "/verify-email";
 export const profileSettingsPagePath = "/profile";
 export const notificationsPagePath = "/notifications";
 export const sharedSearchPagePath = "/search";
@@ -45,6 +46,7 @@ export const quotationListPagePath = "/quotations";
 export const newQuotationPagePath = "/quotations/new";
 export const quotationDetailRoutePath = "/quotations/:quotationId";
 export const productCatalogPagePath = "/products";
+export const productManagementPagePath = "/products/manage";
 export const productDetailRoutePath = "/products/:productId";
 export const editProductRoutePath = "/products/:productId/edit";
 export const supplierProfilePagePath = "/supplier/profile";
@@ -229,6 +231,11 @@ export function getNavigationItems(user: AuthUser | null): NavigationItem[] {
   }
 
   if (user.role === "SALES_OFFICER") {
+    items.push({
+      label: "Product management",
+      description: "Manage active and inactive products and all variant availability states",
+      path: productManagementPagePath,
+    });
     items.push({
       label: "Delivery records",
       description: "Search deliveries, review progress, and safely cancel incorrect schedules",

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMyOrder } from "../api/orders";
 import { getCatalogProducts } from "../api/products";
 import { CustomerPlaceOrderPage } from "./CustomerPlaceOrderPage";
+import { downloadOrderReceipt } from "./orderReceiptPdf";
 
 vi.mock("../api/orders", () => ({
   createMyOrder: vi.fn(),
@@ -43,8 +44,13 @@ vi.mock("../auth/useAuth", () => ({
   }),
 }));
 
+vi.mock("./orderReceiptPdf", () => ({
+  downloadOrderReceipt: vi.fn(),
+}));
+
 const mockedCreateMyOrder = vi.mocked(createMyOrder);
 const mockedGetCatalogProducts = vi.mocked(getCatalogProducts);
+const mockedDownloadOrderReceipt = vi.mocked(downloadOrderReceipt);
 
 function renderPage(path = "/orders/place", strict = false) {
   const page = (
@@ -99,6 +105,7 @@ describe("CustomerPlaceOrderPage", () => {
       customer: { id: 51, fullName: "Asha Perera", email: "asha@example.com" },
       status: "PENDING",
       createdAt: "2026-08-23T10:10:00Z",
+      totalAmount: "4980.00",
       items: [
         {
           id: 101,
@@ -109,6 +116,7 @@ describe("CustomerPlaceOrderPage", () => {
           selectedSize: "M",
           selectedColor: "White",
           unitPriceSnapshot: "2490.00",
+          lineTotal: "4980.00",
         },
       ],
     });
@@ -143,14 +151,23 @@ describe("CustomerPlaceOrderPage", () => {
     await waitFor(() => expect(mockedCreateMyOrder).toHaveBeenCalledWith([
       { productId: 61, variantId: 81, quantity: 2 },
     ]));
-    expect(await screen.findByText("ORD-ABCDEF12345678901234")).toBeInTheDocument();
-    expect(screen.getByText(/Your order was created successfully for Asha Perera/i))
+    expect(await screen.findByRole("heading", { name: "Order confirmed" })).toBeInTheDocument();
+    expect(screen.getAllByText("ORD-ABCDEF12345678901234").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Your order was recorded successfully for Asha Perera/i))
       .toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Items you selected" })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Classic Oxford Shirt selected garment" }))
       .toBeInTheDocument();
     expect(screen.getByText("Line total:").parentElement).toHaveTextContent("LKR 4980.00");
     expect(screen.getByText("Order total").parentElement).toHaveTextContent("LKR 4980.00");
+
+    await user.click(screen.getByRole("button", { name: "Download receipt (PDF)" }));
+    await waitFor(() => expect(mockedDownloadOrderReceipt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderNumber: "ORD-ABCDEF12345678901234",
+        totalAmount: "4980.00",
+      }),
+    ));
   });
 
   it("validates positive whole-number quantity before submission", async () => {
@@ -224,8 +241,10 @@ describe("CustomerPlaceOrderPage", () => {
 
     expect(await screen.findByRole("heading", { name: "Place an order" }))
       .toBeInTheDocument();
-    expect(screen.getByLabelText("Product")).toHaveValue("61");
-    expect(screen.getByLabelText("Size / color")).toHaveValue("81");
+    await waitFor(() => {
+      expect(screen.getByLabelText("Product")).toHaveValue("61");
+      expect(screen.getByLabelText("Size / color")).toHaveValue("81");
+    });
     expect(screen.getByRole("status")).toHaveTextContent(
       "Classic Oxford Shirt was added from the garment catalog",
     );

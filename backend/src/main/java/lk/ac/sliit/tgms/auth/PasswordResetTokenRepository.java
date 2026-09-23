@@ -9,6 +9,8 @@ public interface PasswordResetTokenRepository {
 
     void create(long userId, String tokenHash, Instant expiresAt);
 
+    Optional<Instant> findLatestCreatedAt(long userId);
+
     Optional<PasswordResetToken> findByHashForUpdate(String tokenHash);
 
     void markUsed(long tokenId, Instant usedAt);

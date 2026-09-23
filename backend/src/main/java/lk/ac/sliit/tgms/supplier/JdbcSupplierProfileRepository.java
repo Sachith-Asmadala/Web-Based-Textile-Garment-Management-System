@@ -1,7 +1,6 @@
 package lk.ac.sliit.tgms.supplier;
 
 import java.sql.PreparedStatement;
-import java.util.Map;
 import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -80,18 +79,10 @@ public class JdbcSupplierProfileRepository implements SupplierProfileRepository 
                 userId);
     }
 
-    private long generatedId(KeyHolder keyHolder) {
-        Map<String, Object> keys = keyHolder.getKeys();
-        if (keys != null) {
-            return keys.entrySet().stream()
-                    .filter(entry -> entry.getKey().equalsIgnoreCase("id"))
-                    .map(Map.Entry::getValue)
-                    .filter(Number.class::isInstance)
-                    .map(Number.class::cast)
-                    .findFirst()
-                    .map(Number::longValue)
-                    .orElseThrow(() -> new IllegalStateException(
-                            "Database did not return a supplier profile ID."));
+    static long generatedId(KeyHolder keyHolder) {
+        Number key = keyHolder.getKey();
+        if (key != null) {
+            return key.longValue();
         }
         throw new IllegalStateException("Database did not return a supplier profile ID.");
     }

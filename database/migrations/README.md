@@ -76,14 +76,20 @@ Run all commands from the repository root:
 |---|---|
 | `npm run db:status` | Show applied and pending changesets |
 | `npm run db:migrate` | Apply every pending changeset in order |
-| `npm run db:rollback:preview` | Print SQL for rolling back the latest changeset without changing data |
-| `npm run db:rollback` | Roll back the latest changeset in a disposable development database |
-| `npm run db:verify` | Apply, roll back, and reapply all migrations against an isolated test database |
+| `npm run db:rollback:preview` | Preview rollback SQL only when the latest changeset has a genuine rollback |
+| `npm run db:rollback` | Roll back a genuinely reversible latest changeset in a disposable development database |
+| `npm run db:verify` | Apply the full migration chain and exercise schema plus legacy-data migration tests |
 
-Rollback is deliberately guarded. Preview the SQL first, confirm the target is a
-disposable local database, set `DB_ALLOW_ROLLBACK=true`, run the rollback, then restore
-the setting to `false`. The command is not permission to roll back shared, staging, or
-production data.
+Rollback is deliberately guarded. Preview the SQL first and only run rollback when the
+changeset has a **genuine** rollback that can restore both schema and data. The Inventory,
+Material Supply, and Product `DISCONTINUED` cleanup changesets are intentionally
+**irreversible**: they can permanently delete unreferenced legacy rows and convert retained
+legacy statuses. They therefore do not define fake rollback SQL. Recovering pre-cleanup data
+requires restoring a database backup, not merely widening a CHECK constraint.
+
+For a reversible changeset, confirm the target is a disposable local database, set
+`DB_ALLOW_ROLLBACK=true`, perform the rollback, then restore the setting to `false`. Never
+use rollback as a substitute for a backup on shared, staging, or production data.
 
 Spring Boot also applies pending changesets during application startup. A failed
 migration prevents the API from starting instead of allowing the code and schema to
@@ -98,9 +104,11 @@ drift apart.
    `--changeset initials:create-example-table`.
 4. Include the file once, after every migration that provides a table, column, index,
    or constraint it depends on, from `db.changelog-master.xml`.
-5. Add explicit `--rollback` SQL. Liquibase does not infer rollback for formatted SQL.
-6. Run `npm run db:verify`, then verify against MySQL with `db:status`, `db:migrate`,
-   `db:rollback:preview`, `db:rollback`, and `db:migrate` again.
+5. Add explicit rollback SQL only when it genuinely restores the affected schema and data.
+   For destructive/irreversible data cleanup, omit rollback and document the backup/restore
+   requirement instead of pretending deleted data can be reconstructed.
+6. Run `npm run db:verify`, then verify against MySQL with `db:status` and `db:migrate`.
+   Use `db:rollback:preview` / `db:rollback` only for a genuinely reversible latest changeset.
 7. Run the complete application regression suite.
 
 Never edit, rename, reorder, or reuse the ID of a changeset that has been shared or
@@ -142,8 +150,26 @@ paths, because deployed databases still record them in `DATABASECHANGELOG`.
   `CURRENT_TIMESTAMP(6)` defaults and update `updated_at` on modification.
 - Other timestamp names describe their business event, such as `scheduled_at`.
 - Add nullable `deleted_at` only when an approved requirement introduces soft delete.
-- Preserve referenced business history with controlled active, discontinued,
-  cancelled, or archived states instead of hard deletion.
+- Preserve referenced business history by restricting destructive deletes. Use current business
+  statuses for operational lifecycle state; unreferenced CRUD-owned records may be hard-deleted
+  when the owning module explicitly supports it.
+
+## Irreversible Legacy Status Cleanup
+
+Three forward-only cleanup migrations remove obsolete fake-delete states from current CRUD:
+
+- Inventory Material: unreferenced `DISCONTINUED` rows are deleted; Production-referenced
+  rows become `INACTIVE`.
+- Material Supply: unreferenced `DISCONTINUED` rows are deleted; Inventory-referenced rows
+  become `INACTIVE`.
+- Product: unreferenced `DISCONTINUED` products and owned variants are deleted; products
+  referenced by Orders or Quotations become `INACTIVE`, and retained `DISCONTINUED` variants
+  become `UNAVAILABLE`.
+
+These migrations preserve all referenced Production, Inventory, Order, and Quotation history.
+They are intentionally irreversible because widening the old status constraint cannot restore
+rows that were deleted or determine which current `INACTIVE` / `UNAVAILABLE` rows originally
+held legacy values. Restore a pre-migration backup if the pre-cleanup dataset is ever required.
 
 ## Safety Rules
 
@@ -212,7 +238,7 @@ update/delete behavior preserves the supplier relationship and future history.
 | `quantity` / `unit_of_measure` | Non-negative `DECIMAL(14,3)` quantity and required unit label |
 | `unit_price` | Non-negative exact `DECIMAL(12,2)` current unit price |
 | `delivery_lead_time_days` / `delivery_notes` | Non-negative lead time and optional delivery information |
-| `status` | Controlled `ACTIVE`, `INACTIVE`, or `DISCONTINUED` lifecycle value |
+| `status` | Controlled current `ACTIVE` or `INACTIVE` availability value |
 | `created_at` / `updated_at` | Required UTC-compatible `TIMESTAMP(6)` audit timestamps |
 
 `(supplier_id, material_code)` is unique, allowing different suppliers to use the same
@@ -232,9 +258,9 @@ Garment Product Management owns the catalog tables and their stable IDs:
 
 - `garment_categories` owns category name, description, and active/inactive status.
 - `garment_products` owns the product name, description, category relationship, and
-  `ACTIVE`, `INACTIVE`, or `DISCONTINUED` lifecycle status.
+  current `ACTIVE` or `INACTIVE` lifecycle status.
 - `garment_product_variants` owns each sellable size/color combination, its exact
-  `DECIMAL(12,2)` price, and `AVAILABLE`, `UNAVAILABLE`, or `DISCONTINUED` status.
+  `DECIMAL(12,2)` price, and `AVAILABLE` or `UNAVAILABLE` status.
 
 The variant unique constraint prevents duplicate size/color combinations within one
 product. Foreign keys use `RESTRICT` so referenced catalog history cannot be deleted.
@@ -243,9 +269,9 @@ master data. An Order item may reference a variant ID, but it must also snapshot
 accepted selling price so later catalog price changes cannot rewrite order history.
 
 Catalog selection for a new order requires an active category, active product, and
-available variant. Inactive, unavailable, and discontinued rows remain readable for
-historical references. No demo seed data is included because this repository has no
-existing seed workflow.
+available variant. Products already referenced by Orders or Quotations are protected from
+hard deletion; `INACTIVE` products and `UNAVAILABLE` variants remain usable as retained
+operational/history records.
 
 TGMS-11 creates a product and its first variant in one Spring transaction. Its category
 name is normalized and matched case-insensitively against this source of truth. A
@@ -253,6 +279,13 @@ matching active category is reused by ID; a missing category is created in the s
 transaction; an inactive category is rejected rather than silently reactivated. The
 server fixes new product status to `ACTIVE` and only accepts `AVAILABLE` or
 `UNAVAILABLE` as initial variant availability.
+
+Current Product deletion is real CRUD deletion. An unreferenced product and its owned
+variants are physically deleted. Products referenced by `order_items` or `quotation_items`
+are protected by restrictive foreign keys and the API returns `409 PRODUCT_IN_USE`; Orders
+and Quotations remain intact. The legacy cleanup removes unreferenced `DISCONTINUED`
+products, converts referenced legacy products to `INACTIVE`, and converts retained legacy
+`DISCONTINUED` variants to `UNAVAILABLE` before narrowing both status constraints.
 
 TGMS-12 exposes the public catalog through an application query over these existing
 tables; it adds no schema or seed data. Public visibility requires an `ACTIVE` category,
@@ -282,14 +315,14 @@ the existing staff retrieval contract remains available for authorized lifecycle
 | Acceptance check | Result |
 |---|---|
 | Minimum shared schema | Only `users` added; no business-module table added |
-| Repeatable migration | Automated H2/MySQL-mode test applies, rolls back, and reapplies both changesets |
+| Repeatable migration | Automated H2/MySQL-mode tests apply the migration chain and verify resulting schema constraints |
 | Account integrity | Unique email, controlled role check, non-null bcrypt hash/name/active state, and standard timestamps enforced |
 
 ## TGMS-10 Verification
 
 | Acceptance check | Result |
 |---|---|
-| Schema applies successfully | Catalog changeset is covered by automated apply, rollback, and reapply verification |
+| Schema applies successfully | Catalog changeset is covered by automated migration-chain and schema verification |
 | Required fields represented | Category, product name, size, color, exact price, controlled status/availability, and timestamps are represented |
 | Stable IDs | Every catalog table has an auto-generated `BIGINT` primary key and later modules reference parent records through foreign keys |
 
@@ -301,7 +334,7 @@ the existing staff retrieval contract remains available for authorized lifecycle
 | Authenticated relationship | Required unique `user_id` references `users.id` with restrictive update/delete behavior |
 | Contact/profile integrity | Business name, contact phone, address, and both timestamps are required; blank-value checks are enforced |
 | Credential ownership | Email, password hash, role, active state, and account-holder name remain exclusively in `users` |
-| Repeatable migration | Automated tests apply, roll back, and reapply all four changesets |
+| Repeatable migration | Automated migration tests apply the relevant chain and verify the resulting schema |
 
 ## TGMS-21 Verification
 
@@ -310,7 +343,7 @@ the existing staff retrieval contract remains available for authorized lifecycle
 | Own profile save | Supplier-only service creates or updates by authenticated `users.id` |
 | Ownership | Request contract contains no owner ID; unique `user_id` and server-side lookup prevent cross-account edits |
 | Invalid values | Required and maximum-length rules are enforced by API validation and service normalization |
-| Schema impact | No migration added; automated schema verification remains at four reversible changesets |
+| Schema impact | No migration added; automated schema verification continues against the migration chain |
 
 ## TGMS-22 Verification
 
@@ -319,7 +352,7 @@ the existing staff retrieval contract remains available for authorized lifecycle
 | Stable supply and supplier IDs | Generated `material_supplies.id` and required restrictive `supplier_id` foreign key |
 | Numeric integrity | Database checks reject negative quantity, unit price, and delivery lead time |
 | Inventory readiness | Stable supply ID and documented `material_supply_id` reference contract |
-| Repeatable migration | Automated tests apply, roll back, and reapply all five changesets |
+| Repeatable migration | Automated migration tests apply the relevant chain and verify the resulting schema |
 
 ## TGMS-23 Application Contract
 
@@ -335,7 +368,7 @@ precision, positive quantity/price, and non-negative delivery lead time.
 | Valid record save | Transactional Supplier service inserts and reads back the complete active supply |
 | Ownership | JWT user ID resolves the unique Supplier profile; client ownership fields are ignored |
 | Invalid values | Jakarta request validation, service validation, and TGMS-22 database checks provide layered rejection |
-| Schema impact | No changeset added; the five-change migration chain remains reversible |
+| Schema impact | No changeset added by this application-contract update |
 
 ## TGMS-24 Read Contract
 
@@ -346,15 +379,15 @@ Inventory Manager and Administrator accounts may read company-wide supply rows.
 Customer and other internal roles are denied by reusable server-side authorization.
 
 The optional case-insensitive `search` filter covers material code, name, description,
-unit of measure, and delivery notes. The optional `status` filter accepts only
-`ACTIVE`, `INACTIVE`, or `DISCONTINUED`; combined filters use AND semantics.
+unit of measure, and delivery notes. The optional `status` filter accepts only `ACTIVE`
+or `INACTIVE`; combined filters use AND semantics.
 
 | Acceptance check | Result |
 |---|---|
 | Supplier visibility | Repository query receives only the authenticated Supplier's stable profile ID |
 | Company read access | Inventory Managers and Administrators receive required supply and supplier display data |
 | Search | Parameterized text search and controlled status filter are applied in the repository query layer |
-| Schema impact | No changeset added; all five existing changesets remain reversible |
+| Schema impact | No changeset was added by this update; later legacy cleanup is explicitly forward-only |
 
 ## TGMS-25 Update Contract
 
@@ -375,34 +408,29 @@ and therefore observe committed updates without duplicated master data.
 | Numeric validation | Create and update share positive decimal and non-negative delivery validation |
 | Company visibility | Existing authorized list query reads the updated source row immediately |
 | Audit metadata | Successful update explicitly advances `updated_at` |
-| Schema impact | No changeset added; all five existing changesets remain reversible |
+| Schema impact | No changeset was added by this update; later legacy cleanup is explicitly forward-only |
 
-## TGMS-26 Archive and Inventory Handoff Contract
+## TGMS-26 Delete and Inventory Handoff Contract
 
-TGMS-26 adds no migration and never physically deletes a supply. Supplier-owned
-`DELETE /api/material-supplies/{supplyId}` updates the retained row to
-`DISCONTINUED` and advances `updated_at`. The operation is idempotent. Archived rows
-remain readable by the owner, Inventory Managers, and Administrators, while further
-detail updates are rejected.
+Supplier-owned `DELETE /api/material-supplies/{supplyId}` is a real CRUD delete. An
+unreferenced Material Supply is removed physically. If `inventory_materials.source_material_supply_id`
+references the supply, deletion is rejected with `409 SUPPLY_IN_USE`; Inventory and Production
+history are never cascaded or destroyed. Supplier ownership remains server-enforced.
 
-Inventory migrations must reference `material_supplies.id` as `material_supply_id`
-with restrictive update/delete behavior. New Inventory decisions must resolve an
-`ACTIVE` supply through Supplier Management; `DISCONTINUED` rows remain valid for
-historical foreign-key references. `supplier_profiles.id` remains the stable Supplier
-identity and `material_code` remains only a Supplier-scoped business code.
+The current Material Supply runtime statuses are `ACTIVE` and `INACTIVE`. A follow-up
+Liquibase cleanup removes legacy unreferenced `DISCONTINUED` supplies and converts legacy
+Inventory-referenced `DISCONTINUED` supplies to `INACTIVE` before narrowing the status check.
 
-Current offered quantity, unit price, delivery information, status, and Supplier
-ownership remain Supplier Management master data. Inventory may store its own
-transaction facts—such as quantity actually received or transaction-time cost—but must
-not maintain a competing current-offer record.
+Inventory references `material_supplies.id` with restrictive update/delete behavior. Current
+offer quantity, price, delivery information, availability state, and Supplier ownership remain
+Supplier Management master data; Inventory keeps only its own transaction/stock facts.
 
 | Acceptance check | Result |
 |---|---|
-| CRUD completion | Profile create/update and supply create/read/search/update/archive contracts are implemented |
-| Historical safety | Archive retains the row, stable IDs, timestamps, and authorized read access |
-| Permissions | Only the owning Supplier archives; company roles are read-only and unrelated roles are denied |
-| Inventory handoff | Stable IDs, active-selection rule, restrictive FK rule, and read endpoints are documented |
-| Schema impact | No changeset added; all five existing changesets remain reversible |
+| Unused supply delete | Physical delete |
+| Inventory-referenced supply delete | `409 SUPPLY_IN_USE`; history retained |
+| Current lifecycle statuses | `ACTIVE`, `INACTIVE` |
+| Legacy cleanup | Unreferenced `DISCONTINUED` deleted; referenced rows become `INACTIVE` |
 
 ## TGMS-40 Customer Order Header Contract
 
@@ -437,7 +465,7 @@ production jobs, delivery rows, APIs, or UI.
 | Controlled lifecycle | Database check accepts only the six documented order statuses |
 | Audit timestamps | Required microsecond `created_at` and `updated_at` defaults |
 | Production/Delivery readiness | Future modules reference stable `orders.id`; no premature cross-module columns added |
-| Repeatable migration | Current migration workflow applies, rolls back, and reapplies the full changeset chain |
+| Repeatable migration | Current migration tests apply the full chain and verify schema plus legacy-data behavior |
 
 ## TGMS-41 Order Item Contract
 
@@ -474,7 +502,7 @@ history rows, and records `changed_at` using the project timestamp convention.
 `orders.status` remains the current lifecycle source of truth; `order_status_history` is an audit
 trail, not a competing current-status column. Application updates must use the Order service's
 controlled transition policy and transaction so the current row and history entry commit together.
-The migration workflow now contains nine reversible changesets.
+The status-history changeset itself has an explicit schema rollback; later destructive cleanup changesets remain forward-only.
 
 ## TGMS-48 Customer Quotation Contract
 
@@ -486,8 +514,7 @@ and stores issued-time product-name, size, color, quantity, and unit-price snaps
 
 The schema rejects blank quotation numbers/product names/selections, non-positive quantities/prices,
 and broken or mismatched Product references. Totals are derived from the immutable line snapshots.
-The migration is fully reversible by dropping `quotation_items` before `quotations`; the migration
-workflow now contains ten reversible changesets.
+This quotation changeset itself can be reversed by dropping `quotation_items` before `quotations`; that does not make the later full migration chain reversible.
 
 ## TGMS-49 Order Billing Contract
 
@@ -504,9 +531,7 @@ reference/note, authenticated recorder ID, and timestamps. A composite foreign k
 different order.
 
 Cancellation continues to use `orders.status = CANCELLED`; TGMS-49 adds no delete cascade and no
-physical-order removal. Billing/history foreign keys stay restrictive. The migration is reversible by
-dropping `order_payment_records` before `order_invoices`. The full migration workflow now contains
-eleven reversible changesets.
+physical-order removal. Billing/history foreign keys stay restrictive. This billing changeset itself can be reversed by dropping `order_payment_records` before `order_invoices`; later destructive cleanup changesets remain forward-only.
 
 ## Production Task Contract (TGMS-50)
 
@@ -527,7 +552,7 @@ The database guarantees that the referenced Order exists, but SQL does not dupli
 require `readyForProduction = true` before inserting a task rather than reading/updating Order data
 directly.
 
-The full migration workflow now contains twelve reversible changesets.
+The Production-task changeset itself has schema rollback; later destructive cleanup changesets make the complete chain forward-only across those cleanup points.
 
 
 ## TGMS-52 production task details
@@ -546,8 +571,7 @@ prevents duplicate material assignment within one task, `required_quantity` must
 both foreign keys use restrictive update/delete behavior so Production/Inventory history cannot be
 orphaned. No Inventory master fields or stock quantity are copied into this relation.
 
-The migration is reversible by dropping `production_task_material_requirements`. The full migration
-workflow now contains fourteen reversible changesets.
+This requirements changeset itself can be reversed by dropping `production_task_material_requirements`; later destructive cleanup changesets remain forward-only.
 
 ## TGMS-55 production material usage history
 
@@ -572,8 +596,7 @@ Production completion, or automated optimization is introduced by this changeset
 `production_tasks`: `PENDING`, `PASSED`, or `FAILED`, plus the authenticated checker ID and check
 timestamp. PENDING has no checker/time; PASSED and FAILED require both. The checker references the
 shared `users.id` source of truth with restrictive history-preserving foreign keys. No separate quality
-system, inspection-item table, defect catalogue, or Delivery data is created. The full migration
-workflow now contains sixteen reversible changesets.
+system, inspection-item table, defect catalogue, or Delivery data is created. This QC changeset has schema rollback, while the complete migration chain still contains intentionally irreversible legacy cleanup.
 
 ## TGMS-60 delivery record contract
 
@@ -595,8 +618,7 @@ readiness is an application rule: the later Delivery creation service must call 
 Order handoff and require `readyForDelivery = true` instead of copying or directly inspecting
 `orders.status` as Delivery-owned state.
 
-The migration is reversible with `DROP TABLE deliveries`. The full migration workflow now contains
-seventeen reversible changesets.
+This Delivery changeset itself can be reversed with `DROP TABLE deliveries`; that does not restore data removed or converted by earlier legacy cleanup changesets.
 
 ## TGMS-66 safe Delivery cancellation and replacement lock
 
@@ -624,6 +646,27 @@ hash, and records an expiry plus nullable `used_at` marker. Raw reset tokens and
 stored in this table. The user/open-token index supports invalidating every remaining recovery token
 after one reset succeeds. The migration is reversible by dropping the token table; the full
 migration workflow now contains twenty changesets.
+
+## Customer email verification
+
+`add-email-verification.sql` adds the nullable `users.email_verified_at` security
+state and the `email_verification_codes` table. Existing accounts are marked verified
+during migration so deployment does not lock out established users. Application-created
+Customer accounts explicitly start unverified, while internally provisioned staff are
+verified immediately.
+
+Only a per-code random salt and SHA-256 hash are stored; the six-digit code exists in
+memory only long enough to schedule its email. Codes expire, are single-use, have a
+failed-attempt limit, and are invalidated when a replacement code is issued or the
+account is verified. The foreign key cascades code cleanup only when its owning user is
+deleted. The changeset is included immediately after `create-users.sql`, before modules
+that depend on the shared identity table.
+
+`enforce-customer-email-verification.sql` immediately follows that changeset and
+removes the temporary `CURRENT_TIMESTAMP` column default. This makes direct and
+legacy Customer inserts fail closed as unverified. It also repairs Customer accounts
+created by an older running application during rollout when their verification
+timestamp was generated automatically and no verification code was ever issued.
 
 ## TGMS-73 operational notifications
 

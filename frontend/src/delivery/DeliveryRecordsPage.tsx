@@ -9,10 +9,12 @@ import {
 } from "../api/deliveries";
 import { EmptyState, ErrorState, LoadingState } from "../components/AppStates";
 import { StatusBadge } from "../components/ui/StatusBadge";
+import { MotionSwap } from "../motion/MotionSwap";
 import {
   deliveryOrderSelectionPagePath,
   getDeliveryDetailPagePath,
 } from "../navigation/navigation";
+import { ProductImage } from "../products/ProductImage";
 
 const statuses: Array<{ value: "" | DeliveryStatus; label: string }> = [
   { value: "", label: "All statuses" },
@@ -33,6 +35,7 @@ export function DeliveryRecordsPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<"" | DeliveryStatus>("");
   const [isLoading, setIsLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -46,7 +49,10 @@ export function DeliveryRecordsPage() {
         setError(getDeliveryApiError(caught, "Delivery records could not be loaded.").message);
       })
       .finally(() => {
-        if (!controller.signal.aborted) setIsLoading(false);
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+          setHasLoaded(true);
+        }
       });
     return () => controller.abort();
   }, [search, status]);
@@ -101,19 +107,23 @@ export function DeliveryRecordsPage() {
           </button>
         </form>
 
-        <div className="mt-7">
-          {isLoading ? <LoadingState message="Loading delivery records…" /> : null}
-          {!isLoading && error ? <ErrorState message={error} /> : null}
-          {!isLoading && !error && records.length === 0 ? (
-            <EmptyState
-              title="No delivery records found"
-              message="Try a different search or status, or schedule a delivery-ready order."
-            />
-          ) : null}
-
-          {!isLoading && !error && records.length > 0 ? (
-            <div className="overflow-x-auto rounded-2xl border border-border">
-              <table className="min-w-full divide-y divide-border text-left text-sm">
+        <div aria-busy={isLoading} className="mt-7">
+          <MotionSwap stateKey={!hasLoaded ? "loading" : error && records.length === 0 ? "error" : records.length === 0 ? "empty" : "content"}>
+            {!hasLoaded ? (
+              <LoadingState message="Loading delivery records…" />
+            ) : error && records.length === 0 ? (
+              <ErrorState message={error} />
+            ) : records.length === 0 ? (
+              <EmptyState
+                title="No delivery records found"
+                message="Try a different search or status, or schedule a delivery-ready order."
+              />
+            ) : (
+              <div>
+                {isLoading ? <p className="mb-3 text-sm text-muted" role="status">Updating delivery records…</p> : null}
+                {error ? <p className="mb-3 rounded-xl border border-warning-border bg-warning-soft p-3 text-sm text-warning" role="alert">{error}</p> : null}
+                <div className="overflow-x-auto rounded-2xl border border-border">
+                  <table className="min-w-full divide-y divide-border text-left text-sm">
                 <thead className="bg-background/70 text-muted">
                   <tr>
                     <th className="px-4 py-3 font-medium">Delivery</th>
@@ -131,9 +141,19 @@ export function DeliveryRecordsPage() {
                         <p className="mt-1 text-muted">ID #{record.delivery.id}</p>
                       </td>
                       <td className="px-4 py-4">
-                        <p className="font-medium text-foreground">{record.orderNumber}</p>
-                        <p className="mt-1 text-muted">{record.customerName}</p>
-                        <p className="text-muted">{record.customerEmail}</p>
+                        <div className="flex min-w-64 items-center gap-3">
+                          <ProductImage
+                            alt={`${record.items[0]?.productName ?? record.orderNumber} order item`}
+                            className="h-14 w-14 shrink-0 rounded-xl border border-border"
+                            productName={record.items[0]?.productName ?? record.orderNumber}
+                            src={record.items[0]?.productImageUrl}
+                          />
+                          <div className="min-w-0">
+                            <p className="font-medium text-foreground">{record.orderNumber}</p>
+                            <p className="mt-1 text-muted">{record.customerName}</p>
+                            <p className="text-muted">{record.customerEmail}</p>
+                          </div>
+                        </div>
                       </td>
                       <td className="px-4 py-4 text-foreground-muted">{formatDateTime(record.delivery.scheduledAt)}</td>
                       <td className="px-4 py-4">
@@ -147,9 +167,11 @@ export function DeliveryRecordsPage() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
-            </div>
-          ) : null}
+                  </table>
+                </div>
+              </div>
+            )}
+          </MotionSwap>
         </div>
       </div>
     </section>

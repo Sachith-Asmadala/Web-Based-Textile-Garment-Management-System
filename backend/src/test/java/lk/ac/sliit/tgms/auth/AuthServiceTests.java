@@ -18,13 +18,19 @@ class AuthServiceTests {
 
     private UserAccountRepository repository;
     private PasswordEncoder passwordEncoder;
+    private EmailVerificationService emailVerificationService;
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
         repository = mock(UserAccountRepository.class);
+        emailVerificationService = mock(EmailVerificationService.class);
         passwordEncoder = new BCryptPasswordEncoder(4);
-        authService = new AuthService(repository, passwordEncoder, new PasswordPolicy());
+        authService = new AuthService(
+                repository,
+                passwordEncoder,
+                new PasswordPolicy(),
+                emailVerificationService);
     }
 
     @Test
@@ -56,6 +62,7 @@ class AuthServiceTests {
                 eq("customer@example.com"),
                 any(String.class),
                 eq(UserRole.CUSTOMER));
+        verify(emailVerificationService).issueForRegisteredCustomer(account);
     }
 
     @Test
@@ -78,6 +85,24 @@ class AuthServiceTests {
 
         assertThat(account.id()).isEqualTo(10L);
         assertThat(account.role()).isEqualTo(UserRole.ADMINISTRATOR);
+    }
+
+    @Test
+    void customerCannotLoginUntilEmailIsVerified() {
+        String hash = passwordEncoder.encode("secure-pass-123");
+        UserAccount customer = account(hash, true, UserRole.CUSTOMER);
+        when(repository.findByEmail("customer@example.com"))
+                .thenReturn(Optional.of(customer));
+        when(repository.isEmailVerified(customer.id())).thenReturn(false);
+
+        assertThatThrownBy(() -> authService.login(
+                        "customer@example.com", "secure-pass-123"))
+                .isInstanceOf(EmailNotVerifiedException.class)
+                .hasMessage("Verify your email address before signing in.");
+
+        when(repository.isEmailVerified(customer.id())).thenReturn(true);
+        assertThat(authService.login("customer@example.com", "secure-pass-123"))
+                .isEqualTo(customer);
     }
 
     @Test

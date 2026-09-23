@@ -3,6 +3,7 @@ package lk.ac.sliit.tgms.auth;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -23,16 +24,19 @@ public class AuthController {
     private final AuthTokenService authTokenService;
     private final AuthCookieService authCookieService;
     private final PasswordResetService passwordResetService;
+    private final EmailVerificationService emailVerificationService;
 
     public AuthController(
             AuthService authService,
             AuthTokenService authTokenService,
             AuthCookieService authCookieService,
-            PasswordResetService passwordResetService) {
+            PasswordResetService passwordResetService,
+            EmailVerificationService emailVerificationService) {
         this.authService = authService;
         this.authTokenService = authTokenService;
         this.authCookieService = authCookieService;
         this.passwordResetService = passwordResetService;
+        this.emailVerificationService = emailVerificationService;
     }
 
     @PostMapping("/register")
@@ -40,7 +44,9 @@ public class AuthController {
         UserAccount account = authService.registerCustomer(
                 request.fullName(), request.email(), request.password());
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new AuthResponse("Account created successfully.", UserResponse.from(account)));
+                .body(new AuthResponse(
+                        "Account created. Check your email for the verification code.",
+                        UserResponse.from(account)));
     }
 
     @PostMapping("/login")
@@ -80,6 +86,27 @@ public class AuthController {
                 "Password updated successfully. You can now sign in with your new password."));
     }
 
+    @PostMapping("/email-verification/resend")
+    public ResponseEntity<MessageResponse> resendEmailVerification(
+            @Valid @RequestBody EmailVerificationRequest request) {
+        try {
+            emailVerificationService.requestNewCode(request.email());
+        } catch (EmailVerificationRequestProcessingException ignored) {
+            // Preserve one response for unknown, verified, throttled, and delivery-failed states.
+        }
+        return ResponseEntity.accepted()
+                .body(new MessageResponse(
+                        "If the account is eligible, a new verification code will be sent."));
+    }
+
+    @PostMapping("/email-verification/confirm")
+    public ResponseEntity<MessageResponse> confirmEmailVerification(
+            @Valid @RequestBody EmailVerificationConfirmation request) {
+        emailVerificationService.confirmCode(request.email(), request.code());
+        return ResponseEntity.ok(new MessageResponse(
+                "Email verified successfully. You can now sign in."));
+    }
+
     @GetMapping("/me")
     public UserResponse currentUser(@AuthenticationPrincipal Jwt jwt) {
         return authenticatedUser(jwt);
@@ -113,7 +140,12 @@ public class AuthController {
                     String email,
             @NotBlank(message = "Password is required.")
                     @Size(min = 8, max = 72, message = "Password must contain 8 to 72 characters.")
-                    String password) {}
+                    String password) {
+        @Override
+        public String toString() {
+            return "RegisterRequest[fullName=<redacted>, email=<redacted>, password=<redacted>]";
+        }
+    }
 
     public record LoginRequest(
             @NotBlank(message = "Email is required.")
@@ -122,13 +154,23 @@ public class AuthController {
                     String email,
             @NotBlank(message = "Password is required.")
                     @Size(max = 72, message = "Password must not exceed 72 characters.")
-                    String password) {}
+                    String password) {
+        @Override
+        public String toString() {
+            return "LoginRequest[email=<redacted>, password=<redacted>]";
+        }
+    }
 
     public record PasswordResetRequest(
             @NotBlank(message = "Email is required.")
                     @Email(message = "Enter a valid email address.")
                     @Size(max = 254, message = "Email must not exceed 254 characters.")
-                    String email) {}
+                    String email) {
+        @Override
+        public String toString() {
+            return "PasswordResetRequest[email=<redacted>]";
+        }
+    }
 
     public record PasswordResetConfirmation(
             @NotBlank(message = "Reset token is required.")
@@ -136,7 +178,37 @@ public class AuthController {
                     String token,
             @NotBlank(message = "Password is required.")
                     @Size(min = 8, max = 72, message = "Password must contain 8 to 72 characters.")
-                    String password) {}
+                    String password) {
+        @Override
+        public String toString() {
+            return "PasswordResetConfirmation[token=<redacted>, password=<redacted>]";
+        }
+    }
+
+    public record EmailVerificationRequest(
+            @NotBlank(message = "Email is required.")
+                    @Email(message = "Enter a valid email address.")
+                    @Size(max = 254, message = "Email must not exceed 254 characters.")
+                    String email) {
+        @Override
+        public String toString() {
+            return "EmailVerificationRequest[email=<redacted>]";
+        }
+    }
+
+    public record EmailVerificationConfirmation(
+            @NotBlank(message = "Email is required.")
+                    @Email(message = "Enter a valid email address.")
+                    @Size(max = 254, message = "Email must not exceed 254 characters.")
+                    String email,
+            @NotBlank(message = "Verification code is required.")
+                    @Pattern(regexp = "\\d{6}", message = "Enter the six-digit verification code.")
+                    String code) {
+        @Override
+        public String toString() {
+            return "EmailVerificationConfirmation[email=<redacted>, code=<redacted>]";
+        }
+    }
 
     public record AuthResponse(String message, UserResponse user) {}
 

@@ -33,6 +33,22 @@ public class JdbcPasswordResetTokenRepository implements PasswordResetTokenRepos
     }
 
     @Override
+    public Optional<Instant> findLatestCreatedAt(long userId) {
+        return jdbcTemplate.query(
+                        """
+                        SELECT created_at
+                        FROM password_reset_tokens
+                        WHERE user_id = ?
+                        ORDER BY created_at DESC, id DESC
+                        LIMIT 1
+                        """,
+                        (resultSet, rowNumber) -> resultSet.getTimestamp("created_at").toInstant(),
+                        userId)
+                .stream()
+                .findFirst();
+    }
+
+    @Override
     public Optional<PasswordResetToken> findByHashForUpdate(String tokenHash) {
         return jdbcTemplate.query(
                         """

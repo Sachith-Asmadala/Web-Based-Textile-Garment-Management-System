@@ -38,14 +38,29 @@ public class ProductController {
     @SalesOfficerOnly
     public ResponseEntity<CreateProductResponse> create(
             @Valid @RequestBody CreateProductRequest request) {
-        GarmentProductDetails details = productService.createProduct(
-                request.name(),
-                request.category(),
-                request.imageUrl(),
-                request.size(),
-                request.color(),
-                request.price(),
-                request.availability());
+        GarmentProductDetails details;
+        if (request.variants() == null) {
+            details = productService.createProduct(
+                    request.name(),
+                    request.category(),
+                    request.imageUrl(),
+                    request.size(),
+                    request.color(),
+                    request.price(),
+                    request.availability());
+        } else {
+            details = productService.createProduct(
+                    request.name(), request.category(), request.description(), request.imageUrl(),
+                    request.variants().stream()
+                            .map(variant -> variant == null
+                                    ? null
+                                    : new CreateProductVariantCommand(
+                                            variant.size(),
+                                            variant.color(),
+                                            variant.price(),
+                                            variant.availability()))
+                            .toList());
+        }
         ProductResponse product = ProductResponse.from(details);
         return ResponseEntity.created(URI.create("/api/products/" + product.id()))
                 .body(new CreateProductResponse(
@@ -62,6 +77,16 @@ public class ProductController {
         return productService
                 .getPublicCatalog(search, category, size, color, availability)
                 .stream()
+                .map(ProductResponse::from)
+                .toList();
+    }
+
+    @GetMapping("/manage")
+    @SalesOfficerOnly
+    public List<ProductResponse> listManagementCatalog(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String status) {
+        return productService.getManagementCatalog(search, status).stream()
                 .map(ProductResponse::from)
                 .toList();
     }
@@ -88,22 +113,24 @@ public class ProductController {
                 request.variantId(),
                 request.name(),
                 request.category(),
+                request.description(),
                 request.imageUrl(),
                 request.size(),
                 request.color(),
                 request.price(),
-                request.availability());
+                request.availability(),
+                request.status());
         return new UpdateProductResponse(
                 "Garment product updated successfully.", ProductResponse.from(details));
     }
 
     @DeleteMapping("/{productId}")
     @SalesOfficerOnly
-    public DiscontinueProductResponse discontinue(@PathVariable String productId) {
-        GarmentProductDetails details = productService.discontinueProduct(
-                parseProductId(productId));
-        return new DiscontinueProductResponse(
-                "Garment product discontinued successfully.", ProductResponse.from(details));
+    public DeleteProductResponse delete(@PathVariable String productId) {
+        long parsedProductId = parseProductId(productId);
+        productService.deleteProduct(parsedProductId);
+        return new DeleteProductResponse(
+                "Garment product deleted successfully.", parsedProductId);
     }
 
     private long parseProductId(String productId) {
@@ -116,29 +143,21 @@ public class ProductController {
     }
 
     public record CreateProductRequest(
-            @NotBlank(message = "Product name is required.")
-                    @Size(max = 160, message = "Product name must not exceed 160 characters.")
-                    String name,
-            @NotBlank(message = "Category is required.")
-                    @Size(max = 100, message = "Category must not exceed 100 characters.")
-                    String category,
-            @Size(max = 500, message = "Product image URL must not exceed 500 characters.")
-                    String imageUrl,
-            @NotBlank(message = "Size is required.")
-                    @Size(max = 32, message = "Size must not exceed 32 characters.")
-                    String size,
-            @NotBlank(message = "Color is required.")
-                    @Size(max = 64, message = "Color must not exceed 64 characters.")
-                    String color,
-            @NotNull(message = "Price is required.")
-                    @DecimalMin(value = "0.01", message = "Price must be greater than zero.")
-                    @Digits(
-                            integer = 10,
-                            fraction = 2,
-                            message = "Price must have at most 10 digits and 2 decimals.")
-                    BigDecimal price,
-            @NotNull(message = "Availability is required.")
-                    CreateProductAvailability availability) {}
+            String name,
+            String category,
+            String description,
+            String imageUrl,
+            String size,
+            String color,
+            BigDecimal price,
+            CreateProductAvailability availability,
+            List<CreateProductVariantRequest> variants) {}
+
+    public record CreateProductVariantRequest(
+            String size,
+            String color,
+            BigDecimal price,
+            CreateProductAvailability availability) {}
 
     public record CreateProductResponse(String message, ProductResponse product) {}
 
@@ -152,6 +171,8 @@ public class ProductController {
             @NotBlank(message = "Category is required.")
                     @Size(max = 100, message = "Category must not exceed 100 characters.")
                     String category,
+            @Size(max = 2000, message = "Description must not exceed 2000 characters.")
+                    String description,
             @Size(max = 500, message = "Product image URL must not exceed 500 characters.")
                     String imageUrl,
             @NotBlank(message = "Size is required.")
@@ -168,11 +189,12 @@ public class ProductController {
                             message = "Price must have at most 10 digits and 2 decimals.")
                     BigDecimal price,
             @NotNull(message = "Availability is required.")
-                    CreateProductAvailability availability) {}
+                    CreateProductAvailability availability,
+            ProductStatus status) {}
 
     public record UpdateProductResponse(String message, ProductResponse product) {}
 
-    public record DiscontinueProductResponse(String message, ProductResponse product) {}
+    public record DeleteProductResponse(String message, long productId) {}
 
     public record ProductResponse(
             long id,

@@ -9,7 +9,7 @@ if not "%~1"=="" if /I not "%~1"=="--check" (
 
 where node >nul 2>nul
 if errorlevel 1 (
-  echo [TGMS] Error: Node.js 20.19 or newer is required: https://nodejs.org/
+  echo [TGMS] Error: Node.js 22.22.2+, 24.15.0+, or 26+ is required: https://nodejs.org/
   exit /b 1
 )
 
@@ -25,7 +25,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-node -e "const c=process.versions.node.split('.').map(Number),m=[20,19,0];const ok=c.some((v,i)=^>v^>m[i]^&^&c.slice(0,i).every((p,j)=^>p===m[j]))^|^|c.every((v,i)=^>v===m[i]);if(!ok){console.error('[TGMS] Error: Node.js 20.19 or newer is required; found '+process.versions.node+'.');process.exit(1)}"
+node -e "const [a,b,c]=process.versions.node.split('.').map(Number),atLeast=(m,p)=^>b^>m^|^|(b===m^&^&c^>=p),ok=(a===22^&^&atLeast(22,2))^|^|(a===24^&^&atLeast(15,0))^|^|a^>=26;if(!ok){console.error('[TGMS] Error: Node.js 22.22.2+, 24.15.0+, or 26+ is required; found '+process.versions.node+'.');process.exit(1)}"
 if errorlevel 1 exit /b 1
 
 if not exist "backend\.env" (

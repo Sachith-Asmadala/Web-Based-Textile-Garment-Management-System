@@ -7,7 +7,6 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -69,6 +68,14 @@ public class JdbcProductRepository implements ProductRepository {
             ORDER BY c.name, p.name, p.id, v.id
             """;
 
+    private static final String MANAGEMENT_CATALOG_QUERY_BASE = PRODUCT_DETAILS_SELECT + """
+            WHERE 1 = 1
+            """;
+
+    private static final String MANAGEMENT_CATALOG_ORDER = """
+            ORDER BY p.updated_at DESC, p.id DESC, v.id
+            """;
+
     private static final String PUBLIC_CATALOG_PRODUCT_QUERY = PUBLIC_CATALOG_QUERY_BASE + """
              AND p.id = ?
             """ + PUBLIC_CATALOG_ORDER;
@@ -101,17 +108,19 @@ public class JdbcProductRepository implements ProductRepository {
     }
 
     @Override
-    public long createProduct(long categoryId, String productName, String imageUrl) {
+    public long createProduct(
+            long categoryId, String productName, String description, String imageUrl) {
         return insertAndReturnId(
                 """
-                INSERT INTO garment_products (category_id, name, image_url, status)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO garment_products (category_id, name, description, image_url, status)
+                VALUES (?, ?, ?, ?, ?)
                 """,
                 statement -> {
                     statement.setLong(1, categoryId);
                     statement.setString(2, productName);
-                    statement.setString(3, imageUrl);
-                    statement.setString(4, ProductStatus.ACTIVE.name());
+                    statement.setString(3, description);
+                    statement.setString(4, imageUrl);
+                    statement.setString(5, ProductStatus.ACTIVE.name());
                 });
     }
 
@@ -139,16 +148,24 @@ public class JdbcProductRepository implements ProductRepository {
 
     @Override
     public int updateProduct(
-            long productId, long categoryId, String productName, String imageUrl) {
+            long productId,
+            long categoryId,
+            String productName,
+            String description,
+            String imageUrl,
+            ProductStatus status) {
         return jdbcTemplate.update(
                 """
                 UPDATE garment_products
-                SET category_id = ?, name = ?, image_url = ?, updated_at = CURRENT_TIMESTAMP(6)
+                SET category_id = ?, name = ?, description = ?, image_url = ?, status = ?,
+                    updated_at = CURRENT_TIMESTAMP(6)
                 WHERE id = ?
                 """,
                 categoryId,
                 productName,
+                description,
                 imageUrl,
+                status.name(),
                 productId);
     }
 
@@ -176,25 +193,68 @@ public class JdbcProductRepository implements ProductRepository {
     }
 
     @Override
-    public int discontinueProduct(long productId) {
-        return jdbcTemplate.update(
+    public boolean isHistoricallyReferenced(long productId) {
+        Boolean referenced = jdbcTemplate.queryForObject(
                 """
-                UPDATE garment_products
-                SET status = 'DISCONTINUED', updated_at = CURRENT_TIMESTAMP(6)
-                WHERE id = ? AND status <> 'DISCONTINUED'
+                SELECT CASE WHEN EXISTS (
+                    SELECT 1 FROM order_items WHERE product_id = ?
+                ) OR EXISTS (
+                    SELECT 1 FROM quotation_items WHERE product_id = ?
+                ) THEN TRUE ELSE FALSE END
                 """,
+                Boolean.class,
+                productId,
+                productId);
+        return Boolean.TRUE.equals(referenced);
+    }
+
+    @Override
+    public int deleteVariants(long productId) {
+        return jdbcTemplate.update(
+                "DELETE FROM garment_product_variants WHERE product_id = ?",
                 productId);
     }
 
     @Override
-    public int discontinueVariants(long productId) {
+    public int deleteProduct(long productId) {
         return jdbcTemplate.update(
-                """
-                UPDATE garment_product_variants
-                SET status = 'DISCONTINUED', updated_at = CURRENT_TIMESTAMP(6)
-                WHERE product_id = ? AND status <> 'DISCONTINUED'
-                """,
+                "DELETE FROM garment_products WHERE id = ?",
                 productId);
+    }
+
+    @Override
+    public boolean isImageUrlReferenced(String imageUrl) {
+        Integer references = jdbcTemplate.queryForObject(
+                """
+                SELECT
+                    (SELECT COUNT(*) FROM garment_products WHERE image_url = ?)
+                    +
+                    (SELECT COUNT(*) FROM order_items WHERE product_image_url_snapshot = ?)
+                """,
+                Integer.class,
+                imageUrl,
+                imageUrl);
+        return references != null && references > 0;
+    }
+
+    @Override
+    public boolean isImageUrlReferencedElsewhere(String imageUrl, long productId) {
+        Integer references = jdbcTemplate.queryForObject(
+                """
+                SELECT
+                    (SELECT COUNT(*)
+                     FROM garment_products
+                     WHERE image_url = ? AND id <> ?)
+                    +
+                    (SELECT COUNT(*)
+                     FROM order_items
+                     WHERE product_image_url_snapshot = ?)
+                """,
+                Integer.class,
+                imageUrl,
+                productId,
+                imageUrl);
+        return references != null && references > 0;
     }
 
     @Override
@@ -243,6 +303,29 @@ public class JdbcProductRepository implements ProductRepository {
         }
         query.append(PUBLIC_CATALOG_ORDER);
 
+        return jdbcTemplate.query(
+                query.toString(), this::mapPublicCatalogProducts, parameters.toArray());
+    }
+
+    @Override
+    public List<GarmentProductDetails> findManagementCatalog(ProductManagementFilter filter) {
+        var query = new StringBuilder(MANAGEMENT_CATALOG_QUERY_BASE);
+        var parameters = new ArrayList<Object>();
+        if (filter.search() != null) {
+            query.append("""
+                     AND (
+                         LOCATE(LOWER(?), LOWER(p.name)) > 0
+                         OR LOCATE(LOWER(?), LOWER(c.name)) > 0
+                     )
+                    """);
+            parameters.add(filter.search());
+            parameters.add(filter.search());
+        }
+        if (filter.status() != null) {
+            query.append(" AND p.status = ?\n");
+            parameters.add(filter.status().name());
+        }
+        query.append(MANAGEMENT_CATALOG_ORDER);
         return jdbcTemplate.query(
                 query.toString(), this::mapPublicCatalogProducts, parameters.toArray());
     }
@@ -336,18 +419,10 @@ public class JdbcProductRepository implements ProductRepository {
         return generatedId(keyHolder);
     }
 
-    private long generatedId(KeyHolder keyHolder) {
-        Map<String, Object> keys = keyHolder.getKeys();
-        if (keys != null) {
-            return keys.entrySet().stream()
-                    .filter(entry -> entry.getKey().equalsIgnoreCase("id"))
-                    .map(Map.Entry::getValue)
-                    .filter(Number.class::isInstance)
-                    .map(Number.class::cast)
-                    .findFirst()
-                    .map(Number::longValue)
-                    .orElseThrow(() ->
-                            new IllegalStateException("Database did not return a product ID."));
+    static long generatedId(KeyHolder keyHolder) {
+        Number key = keyHolder.getKey();
+        if (key != null) {
+            return key.longValue();
         }
         throw new IllegalStateException("Database did not return a product ID.");
     }
