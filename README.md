@@ -40,16 +40,6 @@ Repository: <https://github.com/IT24100351/Web-based-textile-and-garment-managem
 - [Deployment](#deployment)
 - [Project documentation](#project-documentation)
 
-## Project team and responsibilities
-
-| Member | IT No. | Major function | Scrum role | Receives data from | Hands data/work to |
-| --- | --- | --- | --- | --- | --- |
-| Nimsara V.G.P | IT25101310 | Order Management | Product Owner | Customer and Product modules | Production, Delivery, Customer tracking/reporting |
-| Basnagoda B.L.K | IT25102148 | Fabric Inventory | Scrum Master | Supplier supply data | Production material availability/consumption |
-| Gunarathna P.G.S.C | IT25103068 | Delivery Management | Developer | Order after Production marks ready | Order completion and Customer tracking |
-| Ketipearachchi R.P | IT25100244 | Supplier Management | Developer | Supplier's own input | Inventory context/source records |
-| Gunathilaka N.T.D.S | IT25102427 | Garment Product Management | Developer | Sales/product definition | Customer catalogue and Order item selection |
-| Dilwan A.W.W.A.S | IT24100351 | Production Management | Developer | Confirmed Order and Inventory | Ready-for-delivery Order |
 
 ## Core capabilities
 
@@ -647,4 +637,4 @@ and test the procedure in a non-production environment before relying on it.
 | [Database migration guide](database/migrations/README.md) | Schema workflow, conventions, and rollback safety |
 | [Demo-data guide](database/demo/README.md) | Demo identities, reset controls, and product media |
 
-These documents, together with this README, are the maintained project references.
+
